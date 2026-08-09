@@ -730,22 +730,70 @@ function updateCwdLabels() {
 }
 
 // ---- rendering ----
-// A hover-only "+" strip at an item boundary; clicking inserts an empty prose
-// item there and opens it for editing. This is how text gets added between two
-// adjacent code blocks now that whitespace-only prose is dropped at parse time.
+// A hover-only "+" strip at an item boundary; clicking opens a chooser there.
+// This is how anything gets added between two adjacent code blocks now that
+// whitespace-only prose is dropped at parse time.
+let pendingInsertIndex = null; // boundary whose chooser is open, if any
+
 function makeInsertDivider(index) {
   const div = document.createElement('div');
   div.className = 'insert-divider';
-  div.title = 'Insert text here';
+  div.title = 'Insert here';
   div.innerHTML = '<span>+</span>';
   div.addEventListener('click', () => {
-    currentItems.splice(index, 0, { type: 'prose', text: '', _justAdded: true });
+    pendingInsertIndex = index;
     renderNoteItems();
-    markDirty();
   });
 
   return div;
 }
+
+const ICON_TEXT = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h16M4 11h16M4 16h10"/></svg>';
+const ICON_CODE = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg>';
+
+// Two big targets shown at the boundary the user clicked: pick what to insert.
+// It's transient UI state (not an item in currentItems), so cancelling leaves
+// the note untouched — no empty placeholder to clean up afterwards.
+function makeInsertChooser(index) {
+  const wrap = document.createElement('div');
+  wrap.className = 'insert-chooser';
+
+  const makeBtn = (icon, label, hint, buildItem) => {
+    const btn = document.createElement('button');
+    btn.className = 'chooser-btn';
+    btn.innerHTML = `${icon}<span class="chooser-label">${label}</span><span class="chooser-hint">${hint}</span>`;
+    btn.addEventListener('click', () => {
+      pendingInsertIndex = null;
+      currentItems.splice(index, 0, buildItem());
+      renderNoteItems(); // the new item carries _justAdded, so it opens focused
+      markDirty();
+    });
+    return btn;
+  };
+
+  wrap.append(
+    makeBtn(ICON_TEXT, 'Text', 'Markdown prose', () => ({ type: 'prose', text: '', _justAdded: true })),
+    makeBtn(ICON_CODE, 'Code Block', 'Runnable shell', () => ({ type: 'block', shell: 'powershell', code: '', _justAdded: true })),
+  );
+  return wrap;
+}
+
+function cancelInsertChooser() {
+  if (pendingInsertIndex === null) return;
+  pendingInsertIndex = null;
+  renderNoteItems();
+}
+
+// Dismiss on Escape or a click outside. Dividers are excluded so clicking a
+// different one moves the chooser instead of just closing it.
+document.addEventListener('mousedown', (e) => {
+  if (pendingInsertIndex === null) return;
+  if (e.target.closest('.insert-chooser, .insert-divider')) return;
+  cancelInsertChooser();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') cancelInsertChooser();
+});
 
 function renderNoteItems() {
   noteItemsEl.innerHTML = '';
@@ -756,6 +804,7 @@ function renderNoteItems() {
   let blockCounter = 0;
   currentItems.forEach((item, idx) => {
     noteItemsEl.appendChild(makeInsertDivider(idx));
+    if (pendingInsertIndex === idx) noteItemsEl.appendChild(makeInsertChooser(idx));
     if (item.type === 'prose') {
       noteItemsEl.appendChild(renderProse(item));
     } else {
@@ -764,6 +813,7 @@ function renderNoteItems() {
     }
   });
   noteItemsEl.appendChild(makeInsertDivider(currentItems.length));
+  if (pendingInsertIndex === currentItems.length) noteItemsEl.appendChild(makeInsertChooser(currentItems.length));
   updateCwdLabels();
 }
 
@@ -854,6 +904,10 @@ function renderProse(item) {
   if (item._justAdded) {
     delete item._justAdded;
     setEditing(true);
+    // focus() does nothing while the element is still detached, and our caller
+    // appends this wrapper only after we return — so land the caret once the
+    // whole render pass has finished.
+    queueMicrotask(() => textarea.focus());
   }
 
   return wrap;
@@ -1006,6 +1060,7 @@ function renderBlock(block) {
   if (block._justAdded) {
     delete block._justAdded;
     setEditing(true);
+    queueMicrotask(() => codeArea.focus()); // see the note in renderProse
   }
 
   let fullOutput = '';
