@@ -278,6 +278,57 @@ body {
 .note-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-status-dot { flex: none; }
 
+/* Star sits at the far right of the row. Out of sight until the row is
+   hovered, so an unstarred list stays quiet; once starred it stays visible,
+   because it's showing state rather than offering an action. */
+.note-star {
+  flex: none;
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  fill: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+#note-list .note-item:hover .note-star { opacity: 0.55; }
+.note-star.starred {
+  color: #e8c14a;
+  fill: #e8c14a;
+  opacity: 0.5;
+}
+#note-list .note-item:hover .note-star.starred { opacity: 0.75; }
+#note-list .note-item .note-star:hover { opacity: 1; }
+.note-star:hover { transform: none; filter: none; } /* the row is the hover target, not the star */
+
+#starred-section.hidden { display: none; }
+#starred-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 6px;
+}
+#starred-header:hover { background: var(--panel); color: var(--text); transform: none; filter: none; }
+.starred-caret { flex: none; transform: rotate(90deg); transition: transform 0.15s ease; }
+#starred-section.collapsed .starred-caret { transform: rotate(0deg); }
+#starred-section.collapsed #starred-items { display: none; }
+#starred-count { margin-left: auto; opacity: 0.7; }
+#starred-items { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
 /* Sidebar reordering: the row lands on the edge the bar is drawn on. Drawn as
    a pseudo-element rather than a box-shadow so the bar stays straight — a
    shadow would trace the row's rounded corners and curve at both ends. */

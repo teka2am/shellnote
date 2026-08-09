@@ -591,15 +591,35 @@ function saveNoteOrder() {
   });
 }
 
-function renderNoteList() {
-  noteListItemsEl.innerHTML = '';
-  noteList.forEach(({ file, path }) => {
-    const item = document.createElement('div');
-    item.className = 'note-item';
-    item.dataset.file = file;
-    item.title = path;
+const ICON_STAR = '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3.6 2.6 5.3 5.8.85-4.2 4.1 1 5.75L12 16.9l-5.2 2.7 1-5.75-4.2-4.1 5.8-.85z"/></svg>';
+
+async function toggleStar(file, starred) {
+  const note = noteList.find((n) => n.file === file);
+  if (note) note.starred = starred;
+  renderNoteList();
+  markActiveInList(currentFile);
+  try {
+    await fetch('/api/starred', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file, starred }),
+    }).then(assertOk);
+  } catch (err) {
+    showToast(`Could not save starred note: ${err.message}`, 'error');
+  }
+}
+
+// One builder for both lists, so a starred note behaves identically whether
+// it's clicked in the starred section or in the full list below it.
+function createNoteItem({ file, path, starred }, { draggable }) {
+  const item = document.createElement('div');
+  item.className = 'note-item';
+  item.dataset.file = file;
+  item.title = path;
+  item.addEventListener('click', () => selectNote(file));
+
+  if (draggable) {
     item.draggable = true;
-    item.addEventListener('click', () => selectNote(file));
     item.addEventListener('dragstart', (e) => {
       dragSourceNote = file;
       e.dataTransfer.effectAllowed = 'move';
@@ -611,21 +631,61 @@ function renderNoteList() {
       clearNoteDropMarkers();
       dragSourceNote = null;
     });
+  }
 
-    const dot = document.createElement('span');
-    dot.className = 'status-dot note-status-dot';
-    item.appendChild(dot);
+  const dot = document.createElement('span');
+  dot.className = 'status-dot note-status-dot';
+  item.appendChild(dot);
 
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'note-name';
-    nameSpan.textContent = file;
-    item.appendChild(nameSpan);
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'note-name';
+  nameSpan.textContent = file;
+  item.appendChild(nameSpan);
 
-    noteListItemsEl.appendChild(item);
+  const star = document.createElement('button');
+  star.className = `note-star${starred ? ' starred' : ''}`;
+  star.innerHTML = ICON_STAR;
+  star.title = starred ? 'Remove from starred' : 'Add to starred';
+  star.addEventListener('click', (e) => {
+    e.stopPropagation(); // starring a note shouldn't also open it
+    toggleStar(file, !starred);
   });
+  item.appendChild(star);
+
+  return item;
+}
+
+// The starred section is a filtered view of the same list, so whatever order
+// the notes are in — A–Z or hand-arranged — both sections follow it.
+function renderNoteList() {
+  noteListItemsEl.innerHTML = '';
+  noteList.forEach((note) => noteListItemsEl.appendChild(createNoteItem(note, { draggable: true })));
+
+  const starred = noteList.filter((n) => n.starred);
+  const section = document.getElementById('starred-section');
+  section.classList.toggle('hidden', starred.length === 0); // nothing starred, nothing to show
+  document.getElementById('starred-count').textContent = starred.length || '';
+  const starredItemsEl = document.getElementById('starred-items');
+  starredItemsEl.innerHTML = '';
+  starred.forEach((note) => starredItemsEl.appendChild(createNoteItem(note, { draggable: false })));
+
   refreshSortButtonState();
   updateStatusIndicators();
 }
+
+// ---- starred section collapse (persisted, like the sidebar and theme) ----
+const starredSectionEl = document.getElementById('starred-section');
+
+function setStarredCollapsed(collapsed) {
+  starredSectionEl.classList.toggle('collapsed', collapsed);
+  localStorage.setItem('starredCollapsed', collapsed ? '1' : '0');
+}
+
+document.getElementById('starred-header').addEventListener('click', () => {
+  setStarredCollapsed(!starredSectionEl.classList.contains('collapsed'));
+});
+
+setStarredCollapsed(localStorage.getItem('starredCollapsed') === '1');
 
 // ---- sidebar drag & drop ----
 let dragSourceNote = null;
@@ -710,8 +770,10 @@ async function loadNoteList(selectFile) {
   await selectNote(toSelect);
 }
 
+// A starred note appears in both sections, so highlight every row for it.
 function markActiveInList(file) {
-  [...noteListItemsEl.children].forEach((el) => el.classList.toggle('active', el.textContent === file));
+  document.querySelectorAll('#note-list .note-item')
+    .forEach((el) => el.classList.toggle('active', el.dataset.file === file));
 }
 
 async function selectNote(file) {
@@ -1743,7 +1805,7 @@ function updateStatusIndicators() {
     byFile.get(ex.noteFile).push(ex);
   });
 
-  document.querySelectorAll('#note-list-items .note-item').forEach((item) => {
+  document.querySelectorAll('#note-list .note-item').forEach((item) => {
     const dot = item.querySelector('.note-status-dot');
     if (!dot) return;
     const status = computeAggregateStatus(byFile.get(item.dataset.file) || []);

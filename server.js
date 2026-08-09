@@ -42,6 +42,17 @@ let NOTES_DIR = isUsableDir(savedConfig.notesFolder) ? savedConfig.notesFolder :
 const DEFAULT_RUN_ROOT = process.cwd();
 let RUN_ROOT = isUsableDir(savedConfig.runRoot) ? savedConfig.runRoot : DEFAULT_RUN_ROOT;
 
+function starredForFolder() {
+  return (configStore.load().starredNotes || {})[NOTES_DIR] || [];
+}
+
+function saveStarredForFolder(files) {
+  const all = { ...(configStore.load().starredNotes || {}) };
+  if (files.length) all[NOTES_DIR] = files;
+  else delete all[NOTES_DIR]; // don't leave empty entries behind per folder
+  configStore.update({ starredNotes: all });
+}
+
 // Reorders the (A–Z) note list to the arrangement saved for this folder.
 // Files created since that arrangement was saved aren't in it — they keep
 // their A–Z position relative to each other and land at the end, where they're
@@ -197,7 +208,20 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/notes' && req.method === 'GET') {
-      return sendJson(res, 200, applyNoteOrder(listNotes(NOTES_DIR)));
+      const starred = new Set(starredForFolder());
+      const notes = applyNoteOrder(listNotes(NOTES_DIR))
+        .map((n) => ({ ...n, starred: starred.has(n.file) }));
+      return sendJson(res, 200, notes);
+    }
+
+    // Starred notes, stored per notes folder like the hand-arranged order.
+    if (p === '/api/starred' && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      const next = new Set(starredForFolder());
+      if (body.starred) next.add(body.file);
+      else next.delete(body.file);
+      saveStarredForFolder([...next]);
+      return sendJson(res, 200, { ok: true });
     }
 
     // A hand-arranged sidebar order, stored per notes folder so each folder
@@ -239,6 +263,7 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/api/notes/') && req.method === 'DELETE') {
       const file = decodeURIComponent(p.slice('/api/notes/'.length));
       deleteNote(NOTES_DIR, file);
+      saveStarredForFolder(starredForFolder().filter((f) => f !== file));
       return sendJson(res, 200, { ok: true });
     }
 
@@ -247,6 +272,10 @@ const server = http.createServer(async (req, res) => {
       const file = decodeURIComponent(renameMatch[1]);
       const body = JSON.parse(await readBody(req));
       const newFile = renameNote(NOTES_DIR, file, body.newName);
+      // Starred state follows the file, rather than reading as "one note
+      // vanished and an unrelated one appeared".
+      const starred = starredForFolder();
+      if (starred.includes(file)) saveStarredForFolder(starred.map((f) => (f === file ? newFile : f)));
       return sendJson(res, 200, { file: newFile });
     }
 
