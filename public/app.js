@@ -1015,6 +1015,7 @@ function renderProcTable() {
       <td>${durationStr}</td>
       <td>${formatBytes(ex.outputChars)}</td>
       <td></td>
+      <td></td>
     `;
 
     const noteLink = document.createElement('a');
@@ -1044,11 +1045,14 @@ function renderProcTable() {
     });
     tr.children[0].appendChild(noteLink);
 
+    const viewCell = tr.children[tr.children.length - 2];
+    const actionCell = tr.lastElementChild;
+
     const viewBtn = document.createElement('button');
     viewBtn.className = 'popout-btn';
     viewBtn.textContent = 'View';
     viewBtn.addEventListener('click', () => window.open(`/output.html?execId=${ex.execId}`, '_blank', 'width=720,height=520'));
-    tr.lastElementChild.appendChild(viewBtn);
+    viewCell.appendChild(viewBtn);
 
     if (ex.status === 'running') {
       const killBtn = document.createElement('button');
@@ -1058,7 +1062,7 @@ function renderProcTable() {
         const res = await fetch(`/api/executions/${ex.execId}/kill`, { method: 'POST' });
         showToast(res.ok ? 'Process killed' : 'Failed to kill process', res.ok ? 'success' : 'error');
       });
-      tr.lastElementChild.appendChild(killBtn);
+      actionCell.appendChild(killBtn);
     } else {
       const removeBtn = document.createElement('button');
       removeBtn.className = 'remove-btn';
@@ -1072,7 +1076,7 @@ function renderProcTable() {
           showToast('Failed to remove execution', 'error');
         }
       });
-      tr.lastElementChild.appendChild(removeBtn);
+      actionCell.appendChild(removeBtn);
     }
 
     procTableBody.appendChild(tr);
