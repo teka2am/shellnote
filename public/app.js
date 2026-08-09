@@ -644,11 +644,12 @@ function joinPath(base, rel) {
 
 // One cd target resolved against `cur`; null means "can't tell" (env vars,
 // substitutions) — the simulation then just keeps the current folder.
-function resolveCdTarget(cur, target) {
+// `tildeOk`: ~ means home in bash and powershell, but cmd has no ~ at all.
+function resolveCdTarget(cur, target, tildeOk) {
   target = target.trim().replace(/^(["'])(.*)\1$/, '$2').trim();
   if (!target || /[$%`]/.test(target)) return null;
-  if (target === '~') return homeDir || null;
-  if (/^~[\\/]/.test(target)) return homeDir ? joinPath(homeDir, target.slice(2)) : null;
+  if (target === '~') return (tildeOk && homeDir) || null;
+  if (/^~[\\/]/.test(target)) return tildeOk && homeDir ? joinPath(homeDir, target.slice(2)) : null;
   if (/^[a-zA-Z]:$/.test(target)) return target.toUpperCase() + '\\'; // bare drive switch
   if (/^[a-zA-Z]:[\\/]/.test(target)) return normalizePath(target, true); // windows absolute
   if (/^[\\/]/.test(target)) {
@@ -659,37 +660,49 @@ function resolveCdTarget(cur, target) {
   return joinPath(cur, target);
 }
 
-// The folder a shell would be in after running this block, starting from `cur`.
+// The folder this shell would be in after running this block, starting from
+// `cur`. Only forms the block's own shell understands are recognized: `cd /d`,
+// `chdir`, and bare drive switches (`D:`) belong to cmd, `Set-Location` and
+// drive switches to powershell, case-sensitive `cd`/`pushd` and bare-`cd`-goes-
+// home to bash — so e.g. a stray `D:` line in a bash block changes nothing.
 function cwdAfterBlock(cur, block) {
+  const shell = block.shell;
+  const posix = shell === 'bash' || shell === 'gitbash';
   for (const line of (block.code || '').split('\n')) {
     // a cd can hide mid-line: `mkdir x && cd x`
     for (const segment of line.split(/&&|\|\||;/)) {
       const s = segment.trim();
-      const m = s.match(/^cd\s+\/d\s+(.+)$/i) || s.match(/^(?:cd|chdir|pushd|set-location)\s+(.+)$/i);
+      let m = null;
+      if (shell === 'cmd') m = s.match(/^cd\s+\/d\s+(.+)$/i) || s.match(/^(?:cd|chdir|pushd)\s+(.+)$/i);
+      else if (shell === 'powershell') m = s.match(/^(?:cd|set-location|pushd)\s+(.+)$/i);
+      else m = s.match(/^(?:cd|pushd)\s+(.+)$/); // bash is case-sensitive: `CD x` is not a cd
       if (m) {
-        const next = resolveCdTarget(cur, m[1]);
+        const next = resolveCdTarget(cur, m[1], !posix ? shell === 'powershell' : true);
         if (next) cur = next;
         continue;
       }
-      // bare `cd` goes home in bash; in cmd/powershell it doesn't change dir
-      if (/^cd$/i.test(s) && (block.shell === 'bash' || block.shell === 'gitbash')) {
-        if (homeDir) cur = homeDir;
-        continue;
+      if (posix) {
+        if (/^cd$/.test(s) && homeDir) cur = homeDir; // bare `cd` goes home in bash
+      } else if (/^[a-zA-Z]:$/.test(s)) {
+        cur = s.toUpperCase() + '\\'; // cmd and powershell switch drive on a bare `D:`
       }
-      if (/^[a-zA-Z]:$/.test(s)) cur = s.toUpperCase() + '\\'; // cmd drive switch
     }
   }
   return cur;
 }
 
-// Per-block starting folders for the open note, in block order.
+// Per-block starting folders for the open note, in block order. Each shell
+// family is its own lineage: a cd in a cmd block shifts only the cmd blocks
+// below it — interleaved bash/powershell blocks keep their own folder, since
+// a real cmd cd could never have influenced them.
 function effectiveCwds() {
   const cwds = [];
-  let cur = runRoot;
+  const perShell = {};
   for (const item of currentItems) {
     if (item.type !== 'block') continue;
+    const cur = perShell[item.shell] || runRoot;
     cwds.push(cur);
-    cur = cwdAfterBlock(cur, item);
+    perShell[item.shell] = cwdAfterBlock(cur, item);
   }
   return cwds;
 }

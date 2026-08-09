@@ -97,6 +97,7 @@ Shows every execution across **all** notes — running and recently finished (la
 - By default, blocks run in the folder the server was started from. Change it in **Settings → Run folder** (persisted).
 - Each block's header shows the folder it will run in.
 - A `cd` command inside a block also shifts the folder shown on (and used by) the blocks **below** it — the note is simulated top to bottom, so a runbook that says "cd into the project, then run the build" works the way it reads. Handled forms include `cd ..`, absolute paths, `cd \`, `cd D:\path`, bare drive switches (`D:`), and `~`. Targets using environment variables can't be predicted and leave the folder unchanged.
+- Each shell keeps its **own** folder lineage: a `cd` in a `cmd` block only shifts the `cmd` blocks below it — interleaved `bash` or `powershell` blocks are unaffected, since a real cmd `cd` could never have influenced them. Only forms the block's shell actually understands are recognized (`cd /d`, `chdir`, bare `D:` for cmd; `Set-Location` and `D:` for powershell; case-sensitive `cd` with bare-`cd`-goes-home for bash).
 
 ## Notes on this version
 
