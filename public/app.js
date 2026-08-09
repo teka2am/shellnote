@@ -1009,7 +1009,7 @@ function renderProcTable() {
       <td>#${ex.blockIndex}</td>
       <td>${ex.shell}</td>
       <td><span class="status-dot ${ex.status}"></span> <span class="status-text ${ex.status}">${ex.status}</span></td>
-      <td>${new Date(ex.startedAt).toLocaleTimeString()}</td>
+      <td>${new Date(ex.startedAt).toLocaleString()}</td>
       <td>${durationStr}</td>
       <td>${formatBytes(ex.outputChars)}</td>
       <td></td>
