@@ -577,10 +577,30 @@ let noteList = []; // [{ file, path }] in sidebar order, custom or A–Z
 
 // The sort button is only actionable when the sidebar is out of A–Z order, so
 // it doubles as an indicator that a hand-arranged order is in effect.
+function isAlphabetical(notes) {
+  const alpha = [...notes].sort((a, b) => a.file.localeCompare(b.file));
+  return notes.every((n, i) => n.file === alpha[i].file);
+}
+
+// Sorting resets the whole sidebar, so the button stays available while either
+// section is hand-arranged.
 function refreshSortButtonState() {
-  const alpha = [...noteList].sort((a, b) => a.file.localeCompare(b.file));
-  const isAlpha = noteList.every((n, i) => n.file === alpha[i].file);
-  document.getElementById('sort-notes-btn').disabled = isAlpha;
+  const inOrder = isAlphabetical(noteList) && isAlphabetical(starredNotes());
+  document.getElementById('sort-notes-btn').disabled = inOrder;
+}
+
+// Quick access keeps its own arrangement — the stored order of starred files —
+// rather than mirroring the list below it.
+function starredNotes() {
+  return noteList.filter((n) => n.starred).sort((a, b) => a.starIndex - b.starIndex);
+}
+
+function saveStarredOrder() {
+  return fetch('/api/starred/order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order: starredNotes().map((n) => n.file) }),
+  });
 }
 
 function saveNoteOrder() {
@@ -595,7 +615,11 @@ const ICON_STAR = '<svg viewBox="0 0 24 24" width="14" height="14" stroke="curre
 
 async function toggleStar(file, starred) {
   const note = noteList.find((n) => n.file === file);
-  if (note) note.starred = starred;
+  if (note) {
+    note.starred = starred;
+    // Match the server: a newly starred note joins the end of Quick access.
+    note.starIndex = starred ? Math.max(-1, ...noteList.map((n) => n.starIndex)) + 1 : -1;
+  }
   renderNoteList();
   markActiveInList(currentFile);
   try {
@@ -611,27 +635,27 @@ async function toggleStar(file, starred) {
 
 // One builder for both lists, so a starred note behaves identically whether
 // it's clicked in the starred section or in the full list below it.
-function createNoteItem({ file, path, starred }, { draggable }) {
+function createNoteItem({ file, path, starred }, { list }) {
   const item = document.createElement('div');
   item.className = 'note-item';
   item.dataset.file = file;
   item.title = path;
   item.addEventListener('click', () => selectNote(file));
 
-  if (draggable) {
-    item.draggable = true;
-    item.addEventListener('dragstart', (e) => {
-      dragSourceNote = file;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', file);
-      item.classList.add('dragging');
-    });
-    item.addEventListener('dragend', () => {
-      item.classList.remove('dragging');
-      clearNoteDropMarkers();
-      dragSourceNote = null;
-    });
-  }
+  item.draggable = true;
+  item.addEventListener('dragstart', (e) => {
+    dragSourceNote = file;
+    dragSourceList = list;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', file);
+    item.classList.add('dragging');
+  });
+  item.addEventListener('dragend', () => {
+    item.classList.remove('dragging');
+    clearNoteDropMarkers();
+    dragSourceNote = null;
+    dragSourceList = null;
+  });
 
   const dot = document.createElement('span');
   dot.className = 'status-dot note-status-dot';
@@ -662,15 +686,15 @@ function createNoteItem({ file, path, starred }, { draggable }) {
 // sections follow it.
 function renderNoteList() {
   noteListItemsEl.innerHTML = '';
-  noteList.forEach((note) => noteListItemsEl.appendChild(createNoteItem(note, { draggable: true })));
+  noteList.forEach((note) => noteListItemsEl.appendChild(createNoteItem(note, { list: noteListItemsEl })));
 
-  const starred = noteList.filter((n) => n.starred);
+  const starred = starredNotes();
   const section = document.getElementById('starred-section');
   section.classList.toggle('hidden', starred.length === 0); // nothing starred, nothing to show
   document.getElementById('starred-count').textContent = starred.length || '';
   const starredItemsEl = document.getElementById('starred-items');
   starredItemsEl.innerHTML = '';
-  starred.forEach((note) => starredItemsEl.appendChild(createNoteItem(note, { draggable: false })));
+  starred.forEach((note) => starredItemsEl.appendChild(createNoteItem(note, { list: starredItemsEl })));
 
   refreshSortButtonState();
   updateStatusIndicators();
@@ -692,17 +716,18 @@ setStarredCollapsed(localStorage.getItem('starredCollapsed') === '1');
 
 // ---- sidebar drag & drop ----
 let dragSourceNote = null;
+let dragSourceList = null; // the container the drag started in
 
 function clearNoteDropMarkers() {
-  noteListItemsEl.querySelectorAll('.drop-before, .drop-after')
+  document.querySelectorAll('#note-list .drop-before, #note-list .drop-after')
     .forEach((el) => el.classList.remove('drop-before', 'drop-after'));
 }
 
-// Which slot in the list a pointer position falls at. Bound to the container
+// Which slot in a list a pointer position falls at. Bound to the container
 // (not each row) so the gaps between rows and the empty space below the last
 // one are valid drop targets too, rather than silently rejecting the drop.
-function noteBoundaryAt(clientY) {
-  const rows = [...noteListItemsEl.children];
+function boundaryIn(container, clientY) {
+  const rows = [...container.children];
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i].getBoundingClientRect();
     if (clientY < r.top + r.height / 2) return i;
@@ -710,38 +735,68 @@ function noteBoundaryAt(clientY) {
   return rows.length;
 }
 
-noteListItemsEl.addEventListener('dragover', (e) => {
-  if (!dragSourceNote) return;
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  clearNoteDropMarkers();
-  const rows = [...noteListItemsEl.children];
-  const boundary = noteBoundaryAt(e.clientY);
-  if (boundary < rows.length) rows[boundary].classList.add('drop-before');
-  else if (rows.length) rows[rows.length - 1].classList.add('drop-after');
+// Both sections reorder the same way; they differ only in which arrangement
+// gets rewritten. A drag is confined to the list it started in — moving a row
+// between sections would mean starring/unstarring, which the star already does.
+function wireListReordering(container, { reorder, save, label }) {
+  container.addEventListener('dragover', (e) => {
+    if (!dragSourceNote || dragSourceList !== container) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    clearNoteDropMarkers();
+    const rows = [...container.children];
+    const boundary = boundaryIn(container, e.clientY);
+    if (boundary < rows.length) rows[boundary].classList.add('drop-before');
+    else if (rows.length) rows[rows.length - 1].classList.add('drop-after');
+  });
+
+  container.addEventListener('dragleave', (e) => {
+    if (!container.contains(e.relatedTarget)) clearNoteDropMarkers();
+  });
+
+  container.addEventListener('drop', async (e) => {
+    if (!dragSourceNote || dragSourceList !== container) return;
+    e.preventDefault();
+    clearNoteDropMarkers();
+    const file = dragSourceNote;
+    const boundary = boundaryIn(container, e.clientY);
+    dragSourceNote = null;
+    dragSourceList = null;
+    if (!reorder(file, boundary)) return; // dropped back where it started
+    renderNoteList();
+    markActiveInList(currentFile);
+    try {
+      await save().then(assertOk);
+    } catch (err) {
+      showToast(`Could not save ${label}: ${err.message}`, 'error');
+    }
+  });
+}
+
+// Moves `file` to `boundary` within `list`; returns false when that's a no-op.
+function moveWithin(list, file, boundary) {
+  const from = list.findIndex((n) => n.file === file);
+  if (from === -1 || boundary === from || boundary === from + 1) return false;
+  const [moved] = list.splice(from, 1);
+  list.splice(boundary > from ? boundary - 1 : boundary, 0, moved);
+  return true;
+}
+
+wireListReordering(noteListItemsEl, {
+  reorder: (file, boundary) => moveWithin(noteList, file, boundary),
+  save: saveNoteOrder,
+  label: 'note order',
 });
 
-noteListItemsEl.addEventListener('dragleave', (e) => {
-  if (!noteListItemsEl.contains(e.relatedTarget)) clearNoteDropMarkers();
-});
-
-noteListItemsEl.addEventListener('drop', async (e) => {
-  if (!dragSourceNote) return;
-  e.preventDefault();
-  clearNoteDropMarkers();
-  const from = noteList.findIndex((n) => n.file === dragSourceNote);
-  const boundary = noteBoundaryAt(e.clientY);
-  dragSourceNote = null;
-  if (from === -1 || boundary === from || boundary === from + 1) return; // no-op
-  const [moved] = noteList.splice(from, 1);
-  noteList.splice(boundary > from ? boundary - 1 : boundary, 0, moved);
-  renderNoteList();
-  markActiveInList(currentFile);
-  try {
-    await saveNoteOrder().then(assertOk);
-  } catch (err) {
-    showToast(`Could not save note order: ${err.message}`, 'error');
-  }
+wireListReordering(document.getElementById('starred-items'), {
+  reorder: (file, boundary) => {
+    const starred = starredNotes();
+    if (!moveWithin(starred, file, boundary)) return false;
+    starred.forEach((n, i) => { n.starIndex = i; }); // starIndex is the Quick access order
+    return true;
+  },
+  save: saveStarredOrder,
+  label: 'Quick access order',
 });
 
 document.getElementById('sort-notes-btn').addEventListener('click', async () => {

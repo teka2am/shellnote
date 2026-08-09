@@ -208,19 +208,33 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/notes' && req.method === 'GET') {
-      const starred = new Set(starredForFolder());
+      // The stored starred list is itself the Quick access order, so its index
+      // travels with each note and the client can lay both sections out from
+      // one response.
+      const starred = starredForFolder();
       const notes = applyNoteOrder(listNotes(NOTES_DIR))
-        .map((n) => ({ ...n, starred: starred.has(n.file) }));
+        .map((n) => ({ ...n, starred: starred.includes(n.file), starIndex: starred.indexOf(n.file) }));
       return sendJson(res, 200, notes);
     }
 
     // Starred notes, stored per notes folder like the hand-arranged order.
     if (p === '/api/starred' && req.method === 'POST') {
       const body = JSON.parse(await readBody(req));
-      const next = new Set(starredForFolder());
-      if (body.starred) next.add(body.file);
-      else next.delete(body.file);
-      saveStarredForFolder([...next]);
+      const next = starredForFolder().filter((f) => f !== body.file);
+      if (body.starred) next.push(body.file); // newly starred notes go to the end
+      saveStarredForFolder(next);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (p === '/api/starred/order' && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      const known = starredForFolder();
+      const posted = (body.order || []).filter((f) => known.includes(f));
+      // Reordering must never unstar: anything starred that the client didn't
+      // list (it starred something in another tab, say) keeps its place at the
+      // end instead of being dropped.
+      const missing = known.filter((f) => !posted.includes(f));
+      saveStarredForFolder([...posted, ...missing]);
       return sendJson(res, 200, { ok: true });
     }
 
@@ -238,6 +252,8 @@ const server = http.createServer(async (req, res) => {
       const orders = { ...(configStore.load().noteOrders || {}) };
       delete orders[NOTES_DIR];
       configStore.update({ noteOrders: orders });
+      // Sorting is a whole-sidebar action, so Quick access goes A–Z too.
+      saveStarredForFolder([...starredForFolder()].sort((a, b) => a.localeCompare(b)));
       return sendJson(res, 200, { ok: true });
     }
 

@@ -299,9 +299,9 @@ body {
 .note-star.starred {
   color: #e8c14a;
   fill: #e8c14a;
-  opacity: 0.5;
+  opacity: 0.75;
 }
-#note-list .note-item:hover .note-star.starred { opacity: 0.75; }
+#note-list .note-item:hover .note-star.starred { opacity: 0.9; }
 #note-list .note-item .note-star:hover { opacity: 1; }
 .note-star:hover { transform: none; filter: none; } /* the row is the hover target, not the star */
 
