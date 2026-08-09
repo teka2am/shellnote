@@ -1,6 +1,6 @@
 {
-  "name": "shellbook",
-  "version": "0.7.4",
+  "name": "shellnote",
+  "version": "0.8.0",
   "description": "A local web notebook for running PowerShell/cmd/bash blocks from Markdown notes.",
   "main": "server.js",
   "scripts": {

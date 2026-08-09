@@ -267,5 +267,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`shellbook running at http://${HOST}:${PORT}`);
+  console.log(`shellnote running at http://${HOST}:${PORT}`);
 });

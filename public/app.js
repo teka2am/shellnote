@@ -32,7 +32,7 @@ let serverStartTime = 0; // used to scope status indicators to executions from t
 // - current working folder: set via the sidebar's Open button, remembered and
 //   reopened automatically next launch as long as it still exists. Also shown
 //   (read-only, with a reset-to-default button) in Settings.
-// - default folder: a fallback used only the first time shellbook runs, or if
+// - default folder: a fallback used only the first time shellnote runs, or if
 //   the remembered working folder above is missing.
 async function loadMeta() {
   const meta = await fetch('/api/meta').then((r) => r.json());

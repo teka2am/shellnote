@@ -1,10 +1,10 @@
-# shellbook
+# shellnote
 
 A local notebook for running PowerShell / cmd / bash / git-bash commands. Notes are plain `.md` files with fenced code blocks that render as runnable, independently-executed cells, plus a live view of every running process across all notes.
 
 ## Why
 
-A wiki page only *describes* a command — shellbook *runs* it. Turn a runbook from "read it, alt-tab to a terminal, retype it, hope you got it right" into "click it."
+A wiki page only *describes* a command — shellnote *runs* it. Turn a runbook from "read it, alt-tab to a terminal, retype it, hope you got it right" into "click it."
 
 **Who it's for:**
 
@@ -17,7 +17,7 @@ A wiki page only *describes* a command — shellbook *runs* it. Turn a runbook f
 
 - **One dashboard for everything running, everywhere.** Kick off a build in one note, a test server in another, a long diagnostic script in a third — the Processes tab shows all of them live, with kill buttons, regardless of which note started them.
 - **Fire-and-forget long jobs.** Start a long-running command, pop its output into a separate window, go do something else — output keeps streaming and you can check back without babysitting a terminal.
-- **It's still just Markdown.** The "runbook" is a plain `.md` file — git-diffable, greppable, readable on GitHub with zero tooling — but also executable when opened in shellbook. Documentation and tooling stay in the same artifact instead of drifting apart.
+- **It's still just Markdown.** The "runbook" is a plain `.md` file — git-diffable, greppable, readable on GitHub with zero tooling — but also executable when opened in shellnote. Documentation and tooling stay in the same artifact instead of drifting apart.
 
 ## Requirements
 
@@ -30,8 +30,8 @@ A wiki page only *describes* a command — shellbook *runs* it. Turn a runbook f
 Clone or copy this folder anywhere — it's fully self-contained:
 
 ```
-git clone <your-repo-url> shellbook
-cd shellbook
+git clone <your-repo-url> shellnote
+cd shellnote
 ```
 
 No build step, no `npm install`.
@@ -54,7 +54,7 @@ $env:PORT=5000; node server.js    # PowerShell
 ## Setup / folder layout
 
 ```
-shellbook/
+shellnote/
   notes/        <- your .md notebooks live here
   server.js
   src/          <- backend (parsing, shell spawning, execution tracking)

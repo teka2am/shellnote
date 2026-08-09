@@ -5,19 +5,19 @@ const os = require('os');
 const SETTINGS_FILENAME = 'settings.json';
 
 // Where the app data folder lives per OS, following each platform's own convention.
-function defaultAppDataDir() {
+function appDataDirFor(appName) {
   if (process.platform === 'win32') {
     const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-    return path.join(base, 'shellbook');
+    return path.join(base, appName);
   }
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'shellbook');
+    return path.join(os.homedir(), 'Library', 'Application Support', appName);
   }
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(base, 'shellbook');
+  return path.join(base, appName);
 }
 
-const DEFAULT_APP_DATA_DIR = defaultAppDataDir();
+const DEFAULT_APP_DATA_DIR = appDataDirFor('shellnote');
 // The app data folder itself can be relocated, which means it can't hold the
 // pointer to its own location — that pointer has to live at a fixed spot the
 // app can always find on startup, before any settings are loaded.
@@ -26,6 +26,17 @@ const POINTER_PATH = path.join(DEFAULT_APP_DATA_DIR, 'location.json');
 // Settings lived next to the source code before app data folders existed —
 // migrated into the resolved app data dir the first time it's read.
 const LEGACY_CONFIG_PATH = path.join(__dirname, '..', '.shellbook-config.json');
+
+// The project (and app data folder) used to be named "shellbook" — copy that
+// folder's contents over the first time the new "shellnote" dir is used, so
+// existing settings/logs aren't orphaned by the rename.
+function migrateLegacyAppDataDir() {
+  const legacyDir = appDataDirFor('shellbook');
+  if (fs.existsSync(DEFAULT_APP_DATA_DIR) || !fs.existsSync(legacyDir)) return;
+  fs.mkdirSync(path.dirname(DEFAULT_APP_DATA_DIR), { recursive: true });
+  fs.cpSync(legacyDir, DEFAULT_APP_DATA_DIR, { recursive: true });
+}
+migrateLegacyAppDataDir();
 
 function readPointer() {
   try {

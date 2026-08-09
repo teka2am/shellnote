@@ -63,7 +63,7 @@ async function init() {
 }
 
 function render(record) {
-  document.title = `shellbook — ${record.noteTitle || record.noteFile || 'output'} #${record.blockIndex}`;
+  document.title = `shellnote — ${record.noteTitle || record.noteFile || 'output'} #${record.blockIndex}`;
   dot.className = `status-dot ${record.status}`;
   meta.textContent = `${record.noteTitle || record.noteFile} · block #${record.blockIndex} · ${record.shell} · ${record.status}`;
 }
