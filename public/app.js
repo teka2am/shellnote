@@ -30,6 +30,7 @@ let serverStartTime = 0; // used to scope status indicators to executions from t
 let runRoot = ''; // where code blocks run, before any in-note cd simulation
 let homeDir = ''; // server user's home — resolves `cd ~` in the cwd simulation
 let ptyAvailable = false; // node-pty installed server-side = full terminal input
+let defaultShell = 'bash'; // shell a new code block starts as, per the server's OS
 
 // ---- meta (version, license, author) + notes folders ----
 // Two independent notions of "notes folder":
@@ -46,6 +47,7 @@ async function loadMeta() {
   defaultNotesFolder = meta.defaultNotesFolder;
   homeDir = meta.homeDir || '';
   ptyAvailable = !!meta.ptyAvailable;
+  if (meta.defaultShell) defaultShell = meta.defaultShell;
   document.getElementById('help-input-mode').innerHTML = ptyAvailable
     ? 'Input mode: <b>full terminal</b> — node-pty is installed, so programs that insist on a real TTY before prompting (ssh, sudo) work too.'
     : 'Input mode: <b>basic</b> — line-based prompts work as-is. Programs that refuse to prompt without a real TTY (ssh, sudo) need the optional <code>node-pty</code> module: run <code>npm install node-pty</code> in the shellnote folder and restart the server.';
@@ -773,7 +775,7 @@ function makeInsertChooser(index) {
 
   wrap.append(
     makeBtn(ICON_TEXT, 'Text', 'Markdown prose', () => ({ type: 'prose', text: '', _justAdded: true })),
-    makeBtn(ICON_CODE, 'Code Block', 'Runnable shell', () => ({ type: 'block', shell: 'powershell', code: '', _justAdded: true })),
+    makeBtn(ICON_CODE, 'Code Block', 'Runnable shell', () => ({ type: 'block', shell: defaultShell, code: '', _justAdded: true })),
   );
   return wrap;
 }
@@ -1244,7 +1246,7 @@ document.getElementById('add-text-btn').addEventListener('click', () => {
 });
 
 document.getElementById('add-block-btn').addEventListener('click', () => {
-  currentItems.push({ type: 'block', shell: 'powershell', code: '', _justAdded: true });
+  currentItems.push({ type: 'block', shell: defaultShell, code: '', _justAdded: true });
   renderNoteItems();
   markDirty();
 });

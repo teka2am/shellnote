@@ -5,7 +5,7 @@ const path = require('path');
 const { URL } = require('url');
 
 const { listNotes, parseNote, createNote, saveNote, deleteNote, renameNote } = require('./src/noteParser');
-const { resolveShell } = require('./src/shellResolver');
+const { resolveShell, isWin } = require('./src/shellResolver');
 const executor = require('./src/executor');
 const configStore = require('./src/config');
 const { browseForFolder } = require('./src/folderBrowser');
@@ -109,6 +109,7 @@ const server = http.createServer(async (req, res) => {
         defaultRunRoot: DEFAULT_RUN_ROOT,
         homeDir: os.homedir(), // lets the client resolve `cd ~` in its cwd simulation
         ptyAvailable: executor.ptyAvailable, // full-terminal input vs basic pipe input
+        defaultShell: isWin ? 'powershell' : 'bash', // what a new code block starts as
       });
     }
 
