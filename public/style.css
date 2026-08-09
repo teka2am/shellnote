@@ -319,6 +319,8 @@ body {
   display: block;
   box-sizing: border-box;
   width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
   min-height: 60vh;
   background: var(--code-bg);
   color: var(--text);
@@ -334,17 +336,78 @@ body {
 #raw-note-editor:focus { border-color: var(--accent); }
 #raw-note-editor.hidden { display: none; }
 
-.prose { margin: 14px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+/* Prose flows as a continuous document; its controls live in a hover-only
+   gutter to the left. #note-items reserves that gutter space with padding. */
+#note-items { max-width: 920px; margin: 0 auto; padding-left: 30px; }
 
-.prose-view { padding: 10px 12px; line-height: 1.5; cursor: text; min-height: 1.4em; }
-.prose-view .empty-hint { color: var(--muted); font-style: italic; margin: 0; }
-.prose-view h1, .prose-view h2, .prose-view h3 { margin: 0.4em 0; }
-.prose-view h1 { font-size: 1.4em; }
-.prose-view h2 { font-size: 1.2em; }
-.prose-view h3 { font-size: 1.05em; }
-.prose-view p { margin: 0.5em 0; }
+.prose { position: relative; margin: 2px 0; }
+
+.item-gutter {
+  position: absolute;
+  left: -28px;
+  top: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.prose:hover .item-gutter,
+.prose:focus-within .item-gutter { opacity: 1; }
+
+.gutter-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+.gutter-btn:hover { color: var(--text); background: var(--panel); }
+.gutter-btn.gutter-remove:hover { color: var(--fail); }
+
+.prose-view { line-height: 1.6; min-height: 1em; }
+.prose-view > :first-child { margin-top: 0; }
+.prose-view > :last-child { margin-bottom: 0; }
+.prose-view .empty-hint { color: var(--muted); font-style: italic; font-size: 12px; }
+.prose-view h1, .prose-view h2 { margin: 0.6em 0 0.4em; }
+.prose-view h3, .prose-view h4, .prose-view h5, .prose-view h6 { margin: 0.5em 0 0.3em; }
+.prose-view h1 { font-size: 1.5em; }
+.prose-view h2 { font-size: 1.25em; }
+.prose-view h3 { font-size: 1.1em; }
+.prose-view h4, .prose-view h5, .prose-view h6 { font-size: 1em; }
+.prose-view p { margin: 0.45em 0; }
+.prose-view ul, .prose-view ol { margin: 0.45em 0; padding-left: 1.6em; }
+.prose-view li { margin: 0.15em 0; }
+.prose-view blockquote {
+  margin: 0.5em 0;
+  padding: 2px 12px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.prose-view hr { border: none; border-top: 1px solid var(--border); margin: 0.9em 0; }
+.prose-view a { color: var(--accent); }
+.prose-view img { max-width: 100%; }
 .prose-view code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
 .prose-view strong { font-weight: 600; }
+pre.md-code {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  margin: 0.6em 0;
+}
+
+/* Empty prose = a thin insertion strip between sections; the hint only shows
+   on hover so it reads as whitespace the rest of the time. */
+.prose-empty .prose-view { min-height: 14px; cursor: pointer; text-align: center; }
+.prose-empty .empty-hint { opacity: 0; transition: opacity 0.12s ease; }
+.prose-empty:hover .empty-hint { opacity: 1; }
 
 textarea.prose-edit, textarea.code-edit {
   width: 100%;

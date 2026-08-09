@@ -300,40 +300,115 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 
 // ---- minimal markdown rendering (view mode) ----
 function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Notes are local files, but a pasted/shared .md shouldn't be able to smuggle a
+// javascript: link into a rendered href.
+function safeUrl(u) {
+  return /^(https?:|mailto:|#|\/|\.)/i.test(u) ? u : '#';
 }
 
 function renderMarkdownInline(s) {
   s = escapeHtml(s);
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, url) => `<img src="${safeUrl(url)}" alt="${alt}">`);
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) => `<a href="${safeUrl(url)}" target="_blank" rel="noopener">${label}</a>`);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   return s;
 }
 
+// Block-level constructs beyond headings/paragraphs (lists, quotes, rules,
+// non-runnable fenced code) all land here because the parser only extracts
+// shell fences into blocks — everything else in the file is "prose" and should
+// still read like a normal rendered note.
 function renderMarkdown(text) {
   const lines = text.split('\n');
   const html = [];
   let paragraph = [];
+  let list = null;
+  let quote = [];
+  let fence = null;
+
   const flushParagraph = () => {
     if (paragraph.length) {
       html.push('<p>' + paragraph.map(renderMarkdownInline).join('<br>') + '</p>');
       paragraph = [];
     }
   };
+  const flushList = () => {
+    if (list) {
+      html.push(`<${list.tag}>` + list.items.map((it) => `<li>${renderMarkdownInline(it)}</li>`).join('') + `</${list.tag}>`);
+      list = null;
+    }
+  };
+  const flushQuote = () => {
+    if (quote.length) {
+      html.push('<blockquote>' + quote.map(renderMarkdownInline).join('<br>') + '</blockquote>');
+      quote = [];
+    }
+  };
+  const flushFence = () => {
+    if (fence) {
+      html.push(`<pre class="md-code"><code>${escapeHtml(fence.lines.join('\n'))}</code></pre>`);
+      fence = null;
+    }
+  };
+  const flushAll = () => { flushParagraph(); flushList(); flushQuote(); };
+
   lines.forEach((line) => {
+    if (fence) {
+      if (/^```/.test(line)) flushFence();
+      else fence.lines.push(line);
+      return;
+    }
+    if (/^```/.test(line)) {
+      flushAll();
+      fence = { lines: [] };
+      return;
+    }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
     if (h) {
-      flushParagraph();
-      const level = h[1].length;
-      html.push(`<h${level}>${renderMarkdownInline(h[2])}</h${level}>`);
-    } else if (line.trim() === '') {
-      flushParagraph();
-    } else {
-      paragraph.push(line);
+      flushAll();
+      html.push(`<h${h[1].length}>${renderMarkdownInline(h[2])}</h${h[1].length}>`);
+      return;
     }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      flushAll();
+      html.push('<hr>');
+      return;
+    }
+    const ul = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (ul) {
+      flushParagraph(); flushQuote();
+      if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] }; }
+      list.items.push(ul[1]);
+      return;
+    }
+    const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (ol) {
+      flushParagraph(); flushQuote();
+      if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] }; }
+      list.items.push(ol[1]);
+      return;
+    }
+    const q = line.match(/^>\s?(.*)$/);
+    if (q) {
+      flushParagraph(); flushList();
+      quote.push(q[1]);
+      return;
+    }
+    if (line.trim() === '') {
+      flushAll();
+      return;
+    }
+    flushList(); flushQuote();
+    paragraph.push(line);
   });
-  flushParagraph();
+  flushAll();
+  flushFence(); // unterminated fence at end of a prose chunk still renders as code
   return html.join('\n');
 }
 
@@ -489,23 +564,32 @@ function autoRows(text) {
   return Math.min(20, Math.max(2, (text || '').split('\n').length));
 }
 
+// Prose renders as part of a continuous document — no card, no header bar.
+// Controls live in a slim gutter on the left that only appears on hover, so
+// reading the note looks like reading a normal rendered .md file. Editing is
+// deliberately NOT single-click (that would hijack text selection): use the
+// gutter pencil or double-click. Empty prose items collapse to a thin spacer
+// strip so the insertion point between two code blocks stays reachable.
 function renderProse(item) {
   const wrap = document.createElement('div');
   wrap.className = 'prose';
 
-  const bar = document.createElement('div');
-  bar.className = 'block-header';
+  const gutter = document.createElement('div');
+  gutter.className = 'item-gutter';
   const handle = document.createElement('span');
   handle.className = 'drag-handle';
   handle.textContent = '⠿';
-  const label = document.createElement('span');
-  label.textContent = 'text';
-  bar.append(handle, label);
+  handle.title = 'Drag to reorder';
+  const editBtn = document.createElement('button');
+  editBtn.className = 'gutter-btn';
+  editBtn.textContent = '✎';
+  editBtn.title = 'Edit text (or double-click it)';
   const removeBtn = document.createElement('button');
-  removeBtn.className = 'remove-btn push-right';
-  removeBtn.textContent = 'Remove';
+  removeBtn.className = 'gutter-btn gutter-remove';
+  removeBtn.textContent = '×';
+  removeBtn.title = 'Remove this text';
   removeBtn.addEventListener('click', () => removeItem(item));
-  bar.appendChild(removeBtn);
+  gutter.append(handle, editBtn, removeBtn);
   attachDragHandlers(wrap, item, handle);
 
   const view = document.createElement('div');
@@ -514,9 +598,14 @@ function renderProse(item) {
   const textarea = document.createElement('textarea');
   textarea.className = 'prose-edit hidden';
   textarea.addEventListener('input', () => { item.text = textarea.value; markDirty(); });
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setEditing(false);
+  });
 
   function renderView() {
-    view.innerHTML = item.text.trim() ? renderMarkdown(item.text) : '<p class="empty-hint">Click to add text…</p>';
+    const empty = !item.text.trim();
+    wrap.classList.toggle('prose-empty', empty);
+    view.innerHTML = empty ? '<span class="empty-hint">+ Add text</span>' : renderMarkdown(item.text);
   }
 
   function setEditing(on) {
@@ -533,13 +622,18 @@ function renderProse(item) {
     }
   }
 
-  view.addEventListener('click', () => setEditing(true));
+  editBtn.addEventListener('click', () => setEditing(true));
+  view.addEventListener('dblclick', () => setEditing(true));
+  // An empty spacer has nothing to select, so single click may as well edit.
+  view.addEventListener('click', () => {
+    if (!item.text.trim()) setEditing(true);
+  });
   wrap.addEventListener('focusout', (e) => {
     if (!wrap.contains(e.relatedTarget)) setEditing(false);
   });
 
   renderView();
-  wrap.append(bar, view, textarea);
+  wrap.append(gutter, view, textarea);
 
   if (item._justAdded) {
     delete item._justAdded;
