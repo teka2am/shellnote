@@ -27,6 +27,8 @@ let currentItems = null; // in-memory editable model for the open note
 let currentNotesFolder = null; // absolute path of the active notes folder
 let defaultNotesFolder = null; // fallback folder the "reset" button restores
 let serverStartTime = 0; // used to scope status indicators to executions from this server session only
+let runRoot = ''; // where code blocks run, before any in-note cd simulation
+let homeDir = ''; // server user's home — resolves `cd ~` in the cwd simulation
 
 // ---- meta (version, license, author) + notes folders ----
 // Two independent notions of "notes folder":
@@ -41,8 +43,10 @@ async function loadMeta() {
   document.getElementById('header-meta').textContent = `${meta.license} License · ${meta.author}`;
   serverStartTime = meta.serverStartTime || 0;
   defaultNotesFolder = meta.defaultNotesFolder;
+  homeDir = meta.homeDir || '';
   updateCurrentFolderInfo(meta.notesFolder, meta.isDefaultFolder);
   updateAppDataFolderInfo(meta.appDataDir, meta.isDefaultAppDataDir);
+  updateRunRootInfo(meta.runRoot, meta.isDefaultRunRoot);
 }
 
 function updateCurrentFolderInfo(folderPath, isDefault) {
@@ -58,6 +62,13 @@ function updateCurrentFolderInfo(folderPath, isDefault) {
 function updateAppDataFolderInfo(folderPath, isDefault) {
   document.getElementById('app-data-folder-label').textContent = isDefault ? `${folderPath} (default)` : folderPath;
   document.getElementById('app-data-folder-reset-btn').classList.toggle('hidden', isDefault);
+}
+
+function updateRunRootInfo(folderPath, isDefault) {
+  runRoot = folderPath;
+  document.getElementById('run-root-label').textContent = isDefault ? `${folderPath} (default)` : folderPath;
+  document.getElementById('run-root-reset-btn').classList.toggle('hidden', isDefault);
+  updateCwdLabels();
 }
 
 document.getElementById('open-folder-btn').addEventListener('click', async () => {
@@ -137,6 +148,32 @@ document.getElementById('app-data-folder-reset-btn').addEventListener('click', a
   }
 });
 
+document.getElementById('run-root-browse-btn').addEventListener('click', async () => {
+  try {
+    const browsed = await fetch('/api/run-root/browse', { method: 'POST' }).then(assertOk).then((r) => r.json());
+    if (!browsed.path) return; // user cancelled the dialog
+    const meta = await fetch('/api/run-root', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: browsed.path }),
+    }).then(assertOk).then((r) => r.json());
+    updateRunRootInfo(meta.path, false);
+    showToast(`Run folder set to "${meta.path}"`);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+document.getElementById('run-root-reset-btn').addEventListener('click', async () => {
+  try {
+    const meta = await fetch('/api/run-root/reset', { method: 'POST' }).then(assertOk).then((r) => r.json());
+    updateRunRootInfo(meta.path, true);
+    showToast('Run folder reset to default');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
 document.getElementById('clear-app-data-btn').addEventListener('click', async () => {
   if (!confirm('Reset all app settings (app data folder, current working folder, and default notes folder) back to defaults? Your notes are never touched.')) return;
   try {
@@ -144,6 +181,7 @@ document.getElementById('clear-app-data-btn').addEventListener('click', async ()
     defaultNotesFolder = result.defaultNotesFolder;
     updateCurrentFolderInfo(result.notesFolder, true);
     updateAppDataFolderInfo(result.appDataDir, true);
+    updateRunRootInfo(result.runRoot, true);
     currentFile = null;
     await loadNoteList();
     showToast('App data cleared and reset to defaults');
@@ -570,6 +608,101 @@ async function selectNote(file) {
   markClean();
 }
 
+// ---- working-directory simulation ----
+// Each block spawns a fresh shell, so a `cd` never really carries over — but a
+// runbook is usually written as if it does. We simulate it: walk the note top
+// to bottom, thread the run root through every cd found in block code, and use
+// the result both for the per-block folder label and as the cwd sent with Run.
+// Pure string work (the client has no filesystem) handling POSIX and Windows
+// paths: cd .., absolute paths, drive-root `cd \`, `cd D:\x`, bare `D:`, ~.
+function isWindowsPath(p) {
+  return /^[a-zA-Z]:/.test(p) || p.startsWith('\\\\');
+}
+
+// Collapse . and .. segments of an absolute path; `..` above the root clamps.
+function normalizePath(p, win) {
+  const sep = win ? '\\' : '/';
+  let prefix = '';
+  if (win) {
+    const m = p.match(/^[a-zA-Z]:/);
+    prefix = m ? m[0].toUpperCase() : '';
+    p = p.slice(prefix.length);
+  }
+  const parts = [];
+  for (const seg of p.split(/[\\/]+/)) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') { parts.pop(); continue; }
+    parts.push(seg);
+  }
+  return win ? prefix + sep + parts.join(sep) : '/' + parts.join(sep);
+}
+
+function joinPath(base, rel) {
+  const win = isWindowsPath(base);
+  return normalizePath(base + (win ? '\\' : '/') + rel, win);
+}
+
+// One cd target resolved against `cur`; null means "can't tell" (env vars,
+// substitutions) — the simulation then just keeps the current folder.
+function resolveCdTarget(cur, target) {
+  target = target.trim().replace(/^(["'])(.*)\1$/, '$2').trim();
+  if (!target || /[$%`]/.test(target)) return null;
+  if (target === '~') return homeDir || null;
+  if (/^~[\\/]/.test(target)) return homeDir ? joinPath(homeDir, target.slice(2)) : null;
+  if (/^[a-zA-Z]:$/.test(target)) return target.toUpperCase() + '\\'; // bare drive switch
+  if (/^[a-zA-Z]:[\\/]/.test(target)) return normalizePath(target, true); // windows absolute
+  if (/^[\\/]/.test(target)) {
+    // root-relative: the current drive's root on windows, filesystem root otherwise
+    if (isWindowsPath(cur)) return normalizePath(cur.slice(0, 2) + target, true);
+    return normalizePath(target, false);
+  }
+  return joinPath(cur, target);
+}
+
+// The folder a shell would be in after running this block, starting from `cur`.
+function cwdAfterBlock(cur, block) {
+  for (const line of (block.code || '').split('\n')) {
+    // a cd can hide mid-line: `mkdir x && cd x`
+    for (const segment of line.split(/&&|\|\||;/)) {
+      const s = segment.trim();
+      const m = s.match(/^cd\s+\/d\s+(.+)$/i) || s.match(/^(?:cd|chdir|pushd|set-location)\s+(.+)$/i);
+      if (m) {
+        const next = resolveCdTarget(cur, m[1]);
+        if (next) cur = next;
+        continue;
+      }
+      // bare `cd` goes home in bash; in cmd/powershell it doesn't change dir
+      if (/^cd$/i.test(s) && (block.shell === 'bash' || block.shell === 'gitbash')) {
+        if (homeDir) cur = homeDir;
+        continue;
+      }
+      if (/^[a-zA-Z]:$/.test(s)) cur = s.toUpperCase() + '\\'; // cmd drive switch
+    }
+  }
+  return cur;
+}
+
+// Per-block starting folders for the open note, in block order.
+function effectiveCwds() {
+  const cwds = [];
+  let cur = runRoot;
+  for (const item of currentItems) {
+    if (item.type !== 'block') continue;
+    cwds.push(cur);
+    cur = cwdAfterBlock(cur, item);
+  }
+  return cwds;
+}
+
+function updateCwdLabels() {
+  if (!currentItems || !runRoot) return;
+  const cwds = effectiveCwds();
+  noteItemsEl.querySelectorAll(':scope > .block .cwd-label').forEach((el, i) => {
+    el.textContent = cwds[i] || '';
+    el.title = `Runs in: ${cwds[i]}`;
+  });
+}
+
 // ---- rendering ----
 // A hover-only "+" strip at an item boundary; clicking inserts an empty prose
 // item there and opens it for editing. This is how text gets added between two
@@ -605,6 +738,7 @@ function renderNoteItems() {
     }
   });
   noteItemsEl.appendChild(makeInsertDivider(currentItems.length));
+  updateCwdLabels();
 }
 
 function removeItem(item) {
@@ -732,18 +866,22 @@ function renderBlock(block) {
     shellLabel.className = `shell-badge ${block.shell}`;
     shellLabel.textContent = block.shell;
     markDirty();
+    updateCwdLabels(); // bare `cd` means home in bash but not in cmd/powershell
   });
 
   const runBtn = document.createElement('button');
   runBtn.className = 'run-btn';
   runBtn.innerHTML = '<span class="play-icon">&#9654;</span> Run';
 
+  const cwdLabel = document.createElement('span');
+  cwdLabel.className = 'cwd-label';
+
   const removeBtn = document.createElement('button');
   removeBtn.className = 'remove-btn push-right';
   removeBtn.textContent = 'Remove';
   removeBtn.addEventListener('click', () => removeItem(block));
 
-  header.append(handle, dot, shellLabel, shellSelect, runBtn, removeBtn);
+  header.append(handle, dot, shellLabel, shellSelect, runBtn, cwdLabel, removeBtn);
   attachDragHandlers(wrap, block, handle);
 
   const codeView = document.createElement('pre');
@@ -753,7 +891,11 @@ function renderBlock(block) {
 
   const codeArea = document.createElement('textarea');
   codeArea.className = 'code-edit hidden';
-  codeArea.addEventListener('input', () => { block.code = codeArea.value; markDirty(); });
+  codeArea.addEventListener('input', () => {
+    block.code = codeArea.value;
+    markDirty();
+    updateCwdLabels(); // typing a cd changes the folder of every block below
+  });
 
   function renderCodeView() {
     codeViewInner.textContent = block.code || ' ';
@@ -831,6 +973,8 @@ function renderBlock(block) {
   }
 
   function ensureExecButtons() {
+    // Exec buttons slot in before the cwd label, so the label reads as the
+    // last piece of run info in the header: Run … Pop out · Kill · <folder>.
     if (!toggleBtn) {
       toggleBtn = document.createElement('button');
       toggleBtn.className = 'toggle-btn';
@@ -840,19 +984,19 @@ function renderBlock(block) {
         toggleBtn.textContent = collapsed ? 'Show more' : 'Show less';
         renderOutput();
       });
-      header.insertBefore(toggleBtn, removeBtn);
+      header.insertBefore(toggleBtn, cwdLabel);
     }
     if (!popoutBtn) {
       popoutBtn = document.createElement('button');
       popoutBtn.className = 'popout-btn';
       popoutBtn.textContent = 'Pop out';
-      header.insertBefore(popoutBtn, removeBtn);
+      header.insertBefore(popoutBtn, cwdLabel);
     }
     if (!killBtn) {
       killBtn = document.createElement('button');
       killBtn.className = 'kill-btn';
       killBtn.textContent = 'Kill';
-      header.insertBefore(killBtn, removeBtn);
+      header.insertBefore(killBtn, cwdLabel);
     }
     if (!clearBtn) {
       // Takes over "push-right" from Remove so the two sit together at the far
@@ -904,7 +1048,7 @@ function renderBlock(block) {
     dot.className = 'status-dot running';
     ensureExecButtons();
 
-    const { execId } = await fetch('/api/blocks/run', {
+    const res = await fetch('/api/blocks/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -913,11 +1057,20 @@ function renderBlock(block) {
         noteFile: currentFile,
         noteTitle: currentFile,
         blockIndex: block.index,
+        cwd: effectiveCwds()[block.index], // the folder shown on this block's label
       }),
-    }).then((r) => r.json());
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      // e.g. a cd above points at a folder that doesn't exist
+      dot.className = 'status-dot failed';
+      killBtn.classList.add('hidden');
+      showToast(body.error || 'Failed to start block', 'error');
+      return;
+    }
 
-    block.runningExecId = execId;
-    attachToExecution(execId);
+    block.runningExecId = body.execId;
+    attachToExecution(body.execId);
   });
 
   if (block.runningExecId) {

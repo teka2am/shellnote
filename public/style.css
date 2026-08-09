@@ -522,6 +522,21 @@ pre.code code { white-space: pre; }
 .shell-badge.bash { background: rgba(76,175,125,0.18); color: #7fcfa4; }
 .shell-badge.gitbash { background: rgba(229,100,90,0.18); color: #ef948c; }
 
+/* Where the block will run. RTL direction keeps the ellipsis at the start so
+   the tail of a long path (the part that matters) stays visible. */
+.cwd-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: Consolas, Menlo, monospace;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl; /* ellipsis on the left… */
+  unicode-bidi: plaintext; /* …but the path itself still reads left-to-right */
+  text-align: left;
+}
+
 .run-btn {
   background: rgba(76, 175, 125, 0.3);
   border: 1px solid var(--border);

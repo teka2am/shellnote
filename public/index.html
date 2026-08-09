@@ -81,6 +81,26 @@
         </div>
         <div class="settings-row">
           <div class="settings-row-header">
+            <span class="settings-label">Run folder</span>
+          </div>
+          <div class="settings-value">
+            <span id="run-root-label"></span>
+            <button id="run-root-browse-btn" class="icon-btn" title="Browse…">
+              <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+                <path fill="currentColor" d="M1.5 4c0-.55.45-1 1-1h3.6l1.3 1.5h6.1c.55 0 1 .45 1 1v6.5c0 .55-.45 1-1 1h-11c-.55 0-1-.45-1-1V4Z"/>
+              </svg>
+            </button>
+            <button id="run-root-reset-btn" class="icon-btn hidden" title="Reset to default folder">
+              <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+                <path fill="none" stroke="currentColor" stroke-width="1.2" d="M13 4.5A5.5 5.5 0 1 0 14 8"/>
+                <path fill="currentColor" d="M13 1.5v3.5h-3.5z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="settings-hint">The folder code blocks run in. Defaults to where the server was started. A cd command in a block also shifts the folder shown on the blocks below it.</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-header">
             <span class="settings-label">App data folder</span>
           </div>
           <div class="settings-value">

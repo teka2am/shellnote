@@ -1,5 +1,6 @@
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { URL } = require('url');
 
@@ -33,6 +34,13 @@ function isUsableDir(p) {
 const savedConfig = configStore.load();
 let DEFAULT_NOTES_DIR = isUsableDir(savedConfig.defaultNotesFolder) ? savedConfig.defaultNotesFolder : STOCK_DEFAULT_NOTES_DIR;
 let NOTES_DIR = isUsableDir(savedConfig.notesFolder) ? savedConfig.notesFolder : DEFAULT_NOTES_DIR;
+
+// Where code blocks run. Defaults to wherever the server was started from,
+// changeable in Settings (persisted). Individual runs can further override it —
+// the client sends the block's effective folder after simulating any `cd`
+// commands in the blocks above it.
+const DEFAULT_RUN_ROOT = process.cwd();
+let RUN_ROOT = isUsableDir(savedConfig.runRoot) ? savedConfig.runRoot : DEFAULT_RUN_ROOT;
 
 const MIME = {
   '.html': 'text/html',
@@ -96,7 +104,30 @@ const server = http.createServer(async (req, res) => {
         defaultNotesFolder: DEFAULT_NOTES_DIR,
         appDataDir: configStore.getAppDataDir(),
         isDefaultAppDataDir: configStore.isDefaultAppDataDir(),
+        runRoot: RUN_ROOT,
+        isDefaultRunRoot: RUN_ROOT === DEFAULT_RUN_ROOT,
+        defaultRunRoot: DEFAULT_RUN_ROOT,
+        homeDir: os.homedir(), // lets the client resolve `cd ~` in its cwd simulation
       });
+    }
+
+    if (p === '/api/run-root/browse' && req.method === 'POST') {
+      const selected = await browseForFolder(RUN_ROOT);
+      return sendJson(res, 200, { path: selected });
+    }
+
+    if (p === '/api/run-root' && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      if (!isUsableDir(body.path)) return sendJson(res, 400, { error: 'That folder does not exist.' });
+      RUN_ROOT = path.resolve(body.path);
+      configStore.update({ runRoot: RUN_ROOT });
+      return sendJson(res, 200, { path: RUN_ROOT });
+    }
+
+    if (p === '/api/run-root/reset' && req.method === 'POST') {
+      RUN_ROOT = DEFAULT_RUN_ROOT;
+      configStore.update({ runRoot: undefined });
+      return sendJson(res, 200, { path: RUN_ROOT });
     }
 
     if (p === '/api/app-data-folder/browse' && req.method === 'POST') {
@@ -121,10 +152,12 @@ const server = http.createServer(async (req, res) => {
       executor.clearHistory();
       DEFAULT_NOTES_DIR = STOCK_DEFAULT_NOTES_DIR;
       NOTES_DIR = DEFAULT_NOTES_DIR;
+      RUN_ROOT = DEFAULT_RUN_ROOT;
       return sendJson(res, 200, {
         notesFolder: NOTES_DIR,
         defaultNotesFolder: DEFAULT_NOTES_DIR,
         appDataDir: configStore.getAppDataDir(),
+        runRoot: RUN_ROOT,
       });
     }
 
@@ -183,11 +216,17 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/blocks/run' && req.method === 'POST') {
       const body = JSON.parse(await readBody(req));
       const { shell, code, noteFile, noteTitle, blockIndex } = body;
+      // The client sends the block's effective folder (run root threaded
+      // through any `cd`s in earlier blocks). It's a simulation, so the folder
+      // may not actually exist — refuse up front with a clear message rather
+      // than letting spawn fail cryptically.
+      const cwd = body.cwd || RUN_ROOT;
+      if (!isUsableDir(cwd)) return sendJson(res, 400, { error: `Run folder does not exist: ${cwd}` });
       const { shellPath, buildArgs, verbatim } = resolveShell(shell);
       const execId = executor.createExecution({
         shellPath,
         args: buildArgs(code),
-        cwd: NOTES_DIR,
+        cwd,
         noteFile,
         noteTitle,
         blockIndex,

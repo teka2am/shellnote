@@ -92,8 +92,14 @@ Reload the note in the browser to pick up external edits.
 
 Shows every execution across **all** notes — running and recently finished (last 50) — with note, block number, shell, status, start time, and duration. Running processes show a **Kill** button here too, so you can monitor and stop anything without switching back to its note. The tab label shows a badge with the current running count.
 
+### Where blocks run
+
+- By default, blocks run in the folder the server was started from. Change it in **Settings → Run folder** (persisted).
+- Each block's header shows the folder it will run in.
+- A `cd` command inside a block also shifts the folder shown on (and used by) the blocks **below** it — the note is simulated top to bottom, so a runbook that says "cd into the project, then run the build" works the way it reads. Handled forms include `cd ..`, absolute paths, `cd \`, `cd D:\path`, bare drive switches (`D:`), and `~`. Targets using environment variables can't be predicted and leave the folder unchanged.
+
 ## Notes on this version
 
-- Blocks are stateless: each **Run** spawns a fresh shell process with no cwd/variables carried over from other blocks.
+- Blocks are otherwise stateless: each **Run** spawns a fresh shell process — environment variables do not carry over between blocks; only the working directory is threaded through as described above.
 - Saving serializes the note's blocks back to Markdown; exact original spacing/formatting outside of block content isn't preserved byte-for-byte.
 - No auth — this is a single-user local tool.
