@@ -252,6 +252,10 @@ function markClean() {
 // ---- drag & drop reordering ----
 let dragSourceItem = null;
 
+function clearDropTargets() {
+  noteItemsEl.querySelectorAll('.insert-divider.drop-target').forEach((el) => el.classList.remove('drop-target'));
+}
+
 function attachDragHandlers(wrap, item, handle) {
   handle.draggable = true;
   handle.addEventListener('dragstart', (e) => {
@@ -262,28 +266,30 @@ function attachDragHandlers(wrap, item, handle) {
   });
   handle.addEventListener('dragend', () => {
     wrap.classList.remove('dragging');
-    noteItemsEl.querySelectorAll('.drag-over-before, .drag-over-after').forEach((el) => el.classList.remove('drag-over-before', 'drag-over-after'));
+    clearDropTargets();
     dragSourceItem = null;
   });
 
-  // The drop indicator is a horizontal bar above or below the hovered item —
-  // upper half of the item means "insert before", lower half "insert after" —
-  // so the user can see the exact landing spot instead of guessing from a
-  // highlight around the whole item.
+  // The drop indicator is the insert-divider line that already sits at every
+  // item boundary — upper half of the hovered item lights the divider above
+  // it, lower half the one below. One consistent marker for prose and code
+  // blocks alike, at the exact landing spot. (Dividers flank every item in
+  // the DOM, so previous/next sibling is always the right divider.)
   wrap.addEventListener('dragover', (e) => {
     if (!dragSourceItem || dragSourceItem === item) return;
     e.preventDefault();
     const rect = wrap.getBoundingClientRect();
     const before = e.clientY < rect.top + rect.height / 2;
-    wrap.classList.toggle('drag-over-before', before);
-    wrap.classList.toggle('drag-over-after', !before);
+    clearDropTargets();
+    const divider = before ? wrap.previousElementSibling : wrap.nextElementSibling;
+    if (divider) divider.classList.add('drop-target');
   });
-  wrap.addEventListener('dragleave', () => wrap.classList.remove('drag-over-before', 'drag-over-after'));
   wrap.addEventListener('drop', (e) => {
     e.preventDefault();
-    const before = wrap.classList.contains('drag-over-before');
-    wrap.classList.remove('drag-over-before', 'drag-over-after');
+    clearDropTargets();
     if (!dragSourceItem || dragSourceItem === item) return;
+    const rect = wrap.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
     const fromIndex = currentItems.indexOf(dragSourceItem);
     if (fromIndex === -1 || currentItems.indexOf(item) === -1) return;
     currentItems.splice(fromIndex, 1);
@@ -557,6 +563,27 @@ function makeInsertDivider(index) {
   div.innerHTML = '<span>+</span>';
   div.addEventListener('click', () => {
     currentItems.splice(index, 0, { type: 'prose', text: '', _justAdded: true });
+    renderNoteItems();
+    markDirty();
+  });
+
+  // The divider strip is itself a drop target: it marks a boundary, so a drop
+  // here inserts the dragged item at exactly this index.
+  div.addEventListener('dragover', (e) => {
+    if (!dragSourceItem) return;
+    e.preventDefault();
+    clearDropTargets();
+    div.classList.add('drop-target');
+  });
+  div.addEventListener('drop', (e) => {
+    e.preventDefault();
+    clearDropTargets();
+    if (!dragSourceItem) return;
+    const fromIndex = currentItems.indexOf(dragSourceItem);
+    if (fromIndex === -1) return;
+    currentItems.splice(fromIndex, 1);
+    currentItems.splice(fromIndex < index ? index - 1 : index, 0, dragSourceItem);
+    dragSourceItem = null;
     renderNoteItems();
     markDirty();
   });

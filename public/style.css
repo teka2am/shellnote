@@ -483,9 +483,11 @@ pre.code code { white-space: pre; }
 .drag-handle:active { cursor: grabbing; }
 
 .block.dragging, .prose.dragging { opacity: 0.4; }
-/* Drop indicator: a bar on the edge the item would land on. */
-.block.drag-over-before, .prose.drag-over-before { box-shadow: 0 -3px 0 0 var(--accent); }
-.block.drag-over-after, .prose.drag-over-after { box-shadow: 0 3px 0 0 var(--accent); }
+/* Drop indicator: the insert-divider at the landing boundary lights up. */
+.insert-divider.drop-target { opacity: 1; }
+.insert-divider.drop-target::before,
+.insert-divider.drop-target::after { border-top: 2px solid var(--accent); }
+.insert-divider.drop-target span { color: var(--accent); }
 
 .status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
 .status-dot.running { background: var(--accent); animation: pulse 1s infinite; }
