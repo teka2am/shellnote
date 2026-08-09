@@ -36,11 +36,14 @@ function parseNote(notesDir, file) {
   let blockIndex = 0;
   let i = 0;
 
+  // Whitespace-only runs (e.g. the blank line separating two adjacent fences)
+  // are not content — emitting them as prose items would litter the UI with
+  // empty text sections on every load or raw/view toggle.
   const flushProse = () => {
-    if (proseBuffer.length) {
+    if (proseBuffer.length && proseBuffer.join('\n').trim()) {
       items.push({ type: 'prose', text: proseBuffer.join('\n') });
-      proseBuffer = [];
     }
+    proseBuffer = [];
   };
 
   while (i < lines.length) {

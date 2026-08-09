@@ -372,7 +372,6 @@ body {
 .prose-view { line-height: 1.6; min-height: 1em; }
 .prose-view > :first-child { margin-top: 0; }
 .prose-view > :last-child { margin-bottom: 0; }
-.prose-view .empty-hint { color: var(--muted); font-style: italic; font-size: 12px; }
 .prose-view h1, .prose-view h2 { margin: 0.6em 0 0.4em; }
 .prose-view h3, .prose-view h4, .prose-view h5, .prose-view h6 { margin: 0.5em 0 0.3em; }
 .prose-view h1 { font-size: 1.5em; }
@@ -403,11 +402,25 @@ pre.md-code {
   margin: 0.6em 0;
 }
 
-/* Empty prose = a thin insertion strip between sections; the hint only shows
-   on hover so it reads as whitespace the rest of the time. */
-.prose-empty .prose-view { min-height: 14px; cursor: pointer; text-align: center; }
-.prose-empty .empty-hint { opacity: 0; transition: opacity 0.12s ease; }
-.prose-empty:hover .empty-hint { opacity: 1; }
+/* Item-boundary insertion strips: invisible until hovered, then a faint "+"
+   line. Clicking inserts a text section at that spot. */
+.insert-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.insert-divider:hover { opacity: 1; }
+.insert-divider::before,
+.insert-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+.insert-divider span { color: var(--muted); font-size: 13px; line-height: 1; }
 
 textarea.prose-edit, textarea.code-edit {
   width: 100%;

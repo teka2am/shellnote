@@ -434,11 +434,13 @@ function parseMarkdownToItems(raw) {
   let blockIndex = 0;
   let i = 0;
 
+  // Mirrors the server parser: whitespace-only runs between fences are not
+  // content, so don't turn them into empty prose items.
   const flushProse = () => {
-    if (proseBuffer.length) {
+    if (proseBuffer.length && proseBuffer.join('\n').trim()) {
       items.push({ type: 'prose', text: proseBuffer.join('\n') });
-      proseBuffer = [];
     }
+    proseBuffer = [];
   };
 
   while (i < lines.length) {
@@ -536,6 +538,22 @@ async function selectNote(file) {
 }
 
 // ---- rendering ----
+// A hover-only "+" strip at an item boundary; clicking inserts an empty prose
+// item there and opens it for editing. This is how text gets added between two
+// adjacent code blocks now that whitespace-only prose is dropped at parse time.
+function makeInsertDivider(index) {
+  const div = document.createElement('div');
+  div.className = 'insert-divider';
+  div.title = 'Insert text here';
+  div.innerHTML = '<span>+</span>';
+  div.addEventListener('click', () => {
+    currentItems.splice(index, 0, { type: 'prose', text: '', _justAdded: true });
+    renderNoteItems();
+    markDirty();
+  });
+  return div;
+}
+
 function renderNoteItems() {
   noteItemsEl.innerHTML = '';
   if (!currentItems.length) {
@@ -543,7 +561,8 @@ function renderNoteItems() {
     return;
   }
   let blockCounter = 0;
-  currentItems.forEach((item) => {
+  currentItems.forEach((item, idx) => {
+    noteItemsEl.appendChild(makeInsertDivider(idx));
     if (item.type === 'prose') {
       noteItemsEl.appendChild(renderProse(item));
     } else {
@@ -551,6 +570,7 @@ function renderNoteItems() {
       noteItemsEl.appendChild(renderBlock(item));
     }
   });
+  noteItemsEl.appendChild(makeInsertDivider(currentItems.length));
 }
 
 function removeItem(item) {
@@ -603,9 +623,7 @@ function renderProse(item) {
   });
 
   function renderView() {
-    const empty = !item.text.trim();
-    wrap.classList.toggle('prose-empty', empty);
-    view.innerHTML = empty ? '<span class="empty-hint">+ Add text</span>' : renderMarkdown(item.text);
+    view.innerHTML = renderMarkdown(item.text);
   }
 
   function setEditing(on) {
@@ -616,6 +634,14 @@ function renderProse(item) {
       textarea.classList.remove('hidden');
       textarea.focus();
     } else {
+      // A section left empty has no rendered form to return to — drop it
+      // (it wouldn't survive a save anyway; the serializer skips empties).
+      if (!item.text.trim() && currentItems.includes(item)) {
+        currentItems = currentItems.filter((i) => i !== item);
+        renderNoteItems();
+        markDirty();
+        return;
+      }
       textarea.classList.add('hidden');
       view.classList.remove('hidden');
       renderView();
@@ -624,10 +650,6 @@ function renderProse(item) {
 
   editBtn.addEventListener('click', () => setEditing(true));
   view.addEventListener('dblclick', () => setEditing(true));
-  // An empty spacer has nothing to select, so single click may as well edit.
-  view.addEventListener('click', () => {
-    if (!item.text.trim()) setEditing(true);
-  });
   wrap.addEventListener('focusout', (e) => {
     if (!wrap.contains(e.relatedTarget)) setEditing(false);
   });
