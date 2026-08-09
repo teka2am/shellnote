@@ -1003,13 +1003,15 @@ function renderProcTable() {
 
     const duration = (ex.finishedAt || Date.now()) - ex.startedAt;
     const durationStr = formatDuration(duration);
+    const startedAt = new Date(ex.startedAt);
+    const startedStr = `${startedAt.toLocaleDateString()} ${startedAt.toLocaleTimeString()}`;
 
     tr.innerHTML = `
       <td></td>
       <td>#${ex.blockIndex}</td>
       <td>${ex.shell}</td>
       <td><span class="status-dot ${ex.status}"></span> <span class="status-text ${ex.status}">${ex.status}</span></td>
-      <td>${new Date(ex.startedAt).toLocaleString()}</td>
+      <td>${startedStr}</td>
       <td>${durationStr}</td>
       <td>${formatBytes(ex.outputChars)}</td>
       <td></td>
