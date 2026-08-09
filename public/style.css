@@ -11,6 +11,11 @@
   --warning: #d99a3d;
   --code-bg: #16171b;
   --output-bg: #101114;
+  /* Structured-data blocks in the log viewer. Deliberately a hue no highlight
+     or bookmark uses, so "this is copyable data" never reads as a severity. */
+  --data-mark: #56c8d8;
+  --data-fill: rgba(86, 200, 216, 0.16);
+  --data-edge: rgba(86, 200, 216, 0.5);
   font-family: -apple-system, Segoe UI, sans-serif;
 }
 
@@ -27,6 +32,9 @@
   --warning: #b3791f;
   --code-bg: #eceef1;
   --output-bg: #e2e4e8;
+  --data-mark: #1d8ea0;
+  --data-fill: rgba(29, 142, 160, 0.18);
+  --data-edge: rgba(29, 142, 160, 0.55);
 }
 
 * { box-sizing: border-box; }
@@ -1253,6 +1261,52 @@ body.out-page {
   border-radius: 2px;
 }
 .log-line mark.is-current { background: var(--accent); color: #fff; }
+
+/* ---- structured data blocks ---- */
+/* Shades the data itself, not the lines it sits on: a block that starts after
+   a timestamp must show exactly where it starts. Like highlights, it only ever
+   adds a background — the log's own text is never recoloured. Adjacent spans
+   on a line meet flush, so a block reads as one continuous shape however many
+   pieces a search happened to cut it into. */
+.dblk {
+  background: var(--data-fill);
+  box-shadow: 0 -1px 0 var(--data-edge) inset, 0 1px 0 var(--data-edge) inset;
+}
+.dblk-a {
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+  box-shadow: 1px 0 0 var(--data-edge) inset, 0 -1px 0 var(--data-edge) inset, 0 1px 0 var(--data-edge) inset;
+}
+.dblk-z {
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+  box-shadow: -1px 0 0 var(--data-edge) inset, 0 -1px 0 var(--data-edge) inset, 0 1px 0 var(--data-edge) inset;
+}
+.dblk-a.dblk-z {
+  box-shadow: 0 0 0 1px var(--data-edge) inset;
+}
+
+/* The copy control, floated at the end of the block. Small enough not to cover
+   the log, but a real target — it's the whole point of the feature. */
+.data-copy {
+  position: absolute;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 5px;
+  background: var(--panel);
+  color: var(--data-mark);
+  border: 1px solid var(--data-edge);
+  border-radius: 5px;
+  font-family: -apple-system, Segoe UI, sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.data-copy:hover { background: var(--data-fill); filter: none; transform: none; }
+.data-copy.hidden { display: none; }
 
 /* ---- bookmark control ---- */
 /* One floating widget that follows the hovered line, rather than a gutter

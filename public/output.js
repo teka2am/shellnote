@@ -79,6 +79,7 @@ function resetModel() {
   firstLineNo = 1;
   totalChars = 0;
   needsFullRender = true;
+  resetBlocks();
 }
 
 function ingest(text) {
@@ -93,6 +94,7 @@ function ingest(text) {
   }
   tailHl = tail ? matchHighlight(tail) : null;
   trimIfNeeded();
+  scheduleDetect();
 }
 
 // Mirrors the server's own cap on retained output. Dropping from the front
@@ -107,6 +109,10 @@ function trimIfNeeded() {
     firstLineNo++;
   }
   needsFullRender = true;
+  // Every detected block's position was measured against the old front of the
+  // buffer, and a block may have been cut in half by the trim. Cheaper to find
+  // them all again — like the rebuild above, this is a once-per-200K-chars cost.
+  resetBlocks();
 }
 
 // ---- view state ----
@@ -152,31 +158,62 @@ function isVisible(text, hl, lineNo) {
 }
 
 // Writes the line's text into a row, wrapping search hits in <mark> so they can
-// be highlighted and stepped through. Without a search it's a single text node,
+// be highlighted and stepped through, and the active data block's slice of the
+// line in a <span> so it can be shaded. Without either it's a single text node,
 // much cheaper for the thousands of rows a long run produces.
-function paint(el, text) {
-  if (!hasMatcher()) {
+//
+// The two overlap freely — a search hit can start outside the block and end
+// inside it — so rather than nesting one inside the other, the line is cut at
+// every boundary and each piece is emitted with whatever it happens to be in.
+function paint(el, text, range) {
+  if (!hasMatcher() && !range) {
     el.textContent = text;
     return;
   }
-  matcher.lastIndex = 0;
-  let frag = null;
-  let last = 0;
-  let m;
-  while ((m = matcher.exec(text))) {
-    if (!frag) frag = document.createDocumentFragment();
-    if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
-    const mark = document.createElement('mark');
-    mark.textContent = m[0];
-    frag.appendChild(mark);
-    last = m.index + m[0].length;
-    if (m[0].length === 0) matcher.lastIndex++; // a pattern like `a*` matches empty forever otherwise
+
+  const marks = [];
+  if (hasMatcher()) {
+    matcher.lastIndex = 0;
+    let m;
+    while ((m = matcher.exec(text))) {
+      if (m[0].length === 0) { matcher.lastIndex++; continue; } // `a*` matches empty forever otherwise
+      marks.push([m.index, m.index + m[0].length]);
+    }
   }
-  if (!frag) {
+  if (!marks.length && !range) {
     el.textContent = text;
     return;
   }
-  if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+
+  const cuts = new Set([0, text.length]);
+  if (range) { cuts.add(range.from); cuts.add(range.to); }
+  for (const [a, b] of marks) { cuts.add(a); cuts.add(b); }
+  const points = [...cuts].sort((a, b) => a - b);
+
+  const frag = document.createDocumentFragment();
+  let mi = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const from = points[i];
+    const to = points[i + 1];
+    while (mi < marks.length && marks[mi][1] <= from) mi++;
+    const isMark = mi < marks.length && marks[mi][0] <= from;
+    let node;
+    if (isMark) {
+      node = document.createElement('mark');
+      node.textContent = text.slice(from, to);
+    } else {
+      node = document.createTextNode(text.slice(from, to));
+    }
+    if (range && from >= range.from && to <= range.to) {
+      const span = document.createElement('span');
+      // The ends are rounded only where the block itself begins and ends, so a
+      // block running over ten lines reads as one shape rather than ten pills.
+      span.className = `dblk${range.head && from === range.from ? ' dblk-a' : ''}${range.tail && to === range.to ? ' dblk-z' : ''}`;
+      span.appendChild(node);
+      node = span;
+    }
+    frag.appendChild(node);
+  }
   el.replaceChildren(frag);
 }
 
@@ -235,7 +272,7 @@ function buildRow(line, lineNo) {
   const el = document.createElement('div');
   el.className = 'log-line';
   el.dataset.n = lineNo;
-  paint(el, line.text);
+  paint(el, line.text, blockRangeIn(lineNo, line.text.length));
   decorate(el, line.hl, lineNo);
   return el;
 }
@@ -260,6 +297,11 @@ function render() {
   refreshMatches();
   updateStatus();
   scheduleMinimap();
+  // A rebuild replaced the rows the active block was painted into.
+  if (activeBlock) {
+    refreshBlockAnchors();
+    positionDataChip();
+  }
   if (following) scroller.scrollTop = scroller.scrollHeight;
 }
 
@@ -271,7 +313,7 @@ function renderTail() {
   }
   tailEl.className = `log-line${isVisible(tail, tailHl, lineNo) ? '' : ' hidden'}`;
   tailEl.dataset.n = lineNo;
-  paint(tailEl, tail);
+  paint(tailEl, tail, blockRangeIn(lineNo, tail.length));
   decorate(tailEl, tailHl, lineNo);
 }
 
@@ -331,6 +373,11 @@ function updateStatus() {
   const shown = linesEl.childElementCount + (tail && !tailEl.classList.contains('hidden') ? 1 : 0);
   lineCountEl.textContent = `${total.toLocaleString()} line${total === 1 ? '' : 's'}`;
   filterInfoEl.textContent = shown === total ? '' : `showing ${shown.toLocaleString()}`;
+  // Says out loud that detection ran and what it found — otherwise the feature
+  // is invisible until you happen to hover the right part of the right line.
+  dataCountEl.textContent = dataOn && blocks.length
+    ? `${blocks.length.toLocaleString()} data block${blocks.length === 1 ? '' : 's'}`
+    : '';
   renderPanel();
 }
 
@@ -393,6 +440,8 @@ function drawMinimap() {
     ctx.fillRect(0, (i / n) * h, w, barH);
   }
 
+  drawDataMarks(ctx, lines, n, h, w, barH);
+
   minimapMarks.replaceChildren(...lines.flatMap((line, i) => {
     if (!line.bm) return [];
     const mark = document.createElement('span');
@@ -410,6 +459,30 @@ function drawMinimap() {
   }));
 
   updateViewportBox();
+}
+
+// Data blocks get a rail down the ruler's left edge rather than a full-width
+// bar: a highlight is a property of the line, but a data block is a region
+// spanning many of them, and a rail reads as one continuous run. It sits on
+// the near edge so it never hides the highlight colours behind it, and the
+// block you're pointing at thickens so you can see where you are in a long log.
+function drawDataMarks(ctx, lines, n, h, w, barH) {
+  if (!dataOn || (!blocks.length && !activeBlock)) return;
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--data-mark').trim() || '#5ec8d8';
+  ctx.fillStyle = color;
+  let bi = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = lines[i].lineNo;
+    while (bi < blocks.length && blocks[bi].el < lineNo) bi++;
+    const b = blocks[bi];
+    const covered = (b && lineNo >= b.sl && lineNo <= b.el)
+      || (activeBlock && lineNo >= activeBlock.sl && lineNo <= activeBlock.el);
+    if (!covered) continue;
+    const live = activeBlock && lineNo >= activeBlock.sl && lineNo <= activeBlock.el;
+    ctx.globalAlpha = live ? 1 : 0.75;
+    ctx.fillRect(0, (i / n) * h, w * (live ? 0.45 : 0.2), barH);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function updateViewportBox() {
@@ -440,6 +513,472 @@ minimap.addEventListener('mousedown', (e) => {
   window.addEventListener('mousemove', move);
   window.addEventListener('mouseup', up);
 });
+
+// ---- structured data blocks ----
+// Logs print JSON and XML in the least copyable way there is: wrapped over
+// dozens of lines, starting halfway along a line behind a timestamp, and
+// finishing somewhere off the bottom of the screen. Detection turns each one
+// into a thing you can point at — hover it, see exactly where it starts and
+// ends, and copy the whole structure without dragging a selection across three
+// screens of output.
+const dataChip = $('out-data-copy');
+const dataChipLabel = $('out-data-kind');
+const dataCountEl = $('out-datacount');
+
+let blocks = []; // { kind, sl, sc, el, ec } in absolute line numbers, sorted by start
+let detectFromLine = 1; // first line whose scan could still change as output arrives
+let dataOn = true;
+let activeBlock = null; // the one block that's highlighted right now, + `pinned`
+let paintedRows = []; // rows currently carrying block styling, so they can be cleaned
+let blockStartEl = null; // the <span> at each end of the active block, for anchoring
+let blockEndEl = null;
+
+function resetBlocks() {
+  blocks = [];
+  detectFromLine = firstLineNo;
+  setActiveBlock(null);
+}
+
+let detectScheduled = false;
+function scheduleDetect() {
+  if (!dataOn || detectScheduled) return;
+  detectScheduled = true;
+  setTimeout(() => {
+    detectScheduled = false;
+    runDetect();
+  }, 250);
+}
+
+// Scans only the lines nobody has scanned yet, which while a process streams is
+// whatever just arrived. The unterminated tail line is left out on purpose: it
+// is half a line, and it becomes a committed line moments later anyway.
+function runDetect() {
+  if (!dataOn) return;
+
+  // Detection resumes at an opener that hadn't closed yet last time, so the
+  // ground it already covered gets walked again. Anything found there before
+  // is dropped first — and the window is widened to take in whole blocks, so a
+  // re-scan can never start halfway through one and cut it in two.
+  let fromLine = detectFromLine;
+  while (blocks.length && blocks[blocks.length - 1].el >= fromLine) {
+    fromLine = Math.min(fromLine, blocks[blocks.length - 1].sl);
+    blocks.pop();
+  }
+
+  const from = Math.max(0, fromLine - firstLineNo);
+  if (from >= committed.length) return;
+
+  const starts = [];
+  const parts = [];
+  let off = 0;
+  for (let i = from; i < committed.length; i++) {
+    starts.push(off);
+    parts.push(committed[i].text);
+    off += committed[i].text.length + 1;
+  }
+  const text = parts.join('\n');
+  const { blocks: found, resume, more } = window.DataBlocks.detect(text);
+
+  for (const b of found) {
+    const sl = lineOfOffset(starts, b.start);
+    const el = lineOfOffset(starts, b.end - 1);
+    blocks.push({
+      kind: b.kind,
+      sl: firstLineNo + from + sl,
+      sc: b.start - starts[sl],
+      el: firstLineNo + from + el,
+      ec: b.end - starts[el],
+    });
+  }
+  detectFromLine = resume >= text.length
+    ? firstLineNo + committed.length
+    : firstLineNo + from + lineOfOffset(starts, resume);
+
+  if (found.length) {
+    updateStatus();
+    scheduleMinimap();
+  }
+  // The pass stopped on its own budget rather than at the end of the log, so
+  // the rest gets its own tick instead of waiting for output that, on a run
+  // that has already finished, is never coming.
+  if (more) scheduleDetect();
+}
+
+function lineOfOffset(starts, off) {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= off) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+function lineTextByNo(lineNo) {
+  const idx = lineNo - firstLineNo;
+  if (idx >= 0 && idx < committed.length) return committed[idx].text;
+  if (idx === committed.length && tail) return tail;
+  return null;
+}
+
+const lastLineNo = () => firstLineNo + committed.length - (tail ? 0 : 1);
+
+function highlightOf(lineNo) {
+  const idx = lineNo - firstLineNo;
+  return idx >= 0 && idx < committed.length ? committed[idx].hl : tailHl;
+}
+
+function rowFor(lineNo) {
+  if (Number(tailEl.dataset.n) === lineNo) return tailEl;
+  return linesEl.querySelector(`.log-line[data-n="${lineNo}"]`);
+}
+
+function inBlock(b, lineNo, col) {
+  if (lineNo < b.sl || lineNo > b.el) return false;
+  if (lineNo === b.sl && col < b.sc) return false;
+  if (lineNo === b.el && col > b.ec) return false;
+  return true;
+}
+
+// Blocks never overlap, so the containing one is at or just before the last
+// block that starts on this line or earlier.
+function blockAt(lineNo, col) {
+  let lo = 0;
+  let hi = blocks.length - 1;
+  let at = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (blocks[mid].sl <= lineNo) { at = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  for (let i = at; i >= 0; i--) {
+    if (blocks[i].el < lineNo) break;
+    if (inBlock(blocks[i], lineNo, col)) return blocks[i];
+  }
+  return null;
+}
+
+// The slice of one line the active block covers — a whole line in the middle of
+// a block, part of one at either end.
+function blockRangeIn(lineNo, len) {
+  const b = activeBlock;
+  if (!b || lineNo < b.sl || lineNo > b.el) return null;
+  return {
+    from: lineNo === b.sl ? Math.min(b.sc, len) : 0,
+    to: lineNo === b.el ? Math.min(b.ec, len) : len,
+    head: lineNo === b.sl,
+    tail: lineNo === b.el,
+  };
+}
+
+// Read from the model rather than the rendered rows, so what lands on the
+// clipboard is the data as the process printed it — whole, in order, and
+// unaffected by which lines the filters happen to be hiding.
+function blockText(b) {
+  const out = [];
+  for (let n = b.sl; n <= b.el; n++) {
+    const text = lineTextByNo(n);
+    if (text === null) continue;
+    out.push(text.slice(n === b.sl ? b.sc : 0, n === b.el ? b.ec : text.length));
+  }
+  return out.join('\n');
+}
+
+function sameBlock(a, b) {
+  if (!a || !b) return a === b;
+  return a.sl === b.sl && a.sc === b.sc && a.el === b.el && a.ec === b.ec && !!a.pinned === !!b.pinned;
+}
+
+function repaintLine(lineNo) {
+  const row = rowFor(lineNo);
+  const text = lineTextByNo(lineNo);
+  if (!row || text === null) return;
+  paint(row, text, blockRangeIn(lineNo, text.length));
+  decorate(row, highlightOf(lineNo), lineNo); // paint() cleared the bookmark flag
+}
+
+function setActiveBlock(b) {
+  if (sameBlock(activeBlock, b)) return;
+  // Shading a block rebuilds the text nodes of every row it touches, and a
+  // selection living in those nodes would die with them — taking Ctrl+C, the
+  // one thing that must keep copying exactly what the reader chose, with it.
+  // So the selection is measured in lines and columns first and laid back over
+  // the new nodes after.
+  const held = captureSelection();
+  const stale = paintedRows;
+  activeBlock = b;
+  paintedRows = [];
+  if (b) for (let n = b.sl; n <= b.el; n++) paintedRows.push(n);
+  for (const n of stale) if (!b || n < b.sl || n > b.el) repaintLine(n);
+  for (const n of paintedRows) repaintLine(n);
+  restoreSelection(held);
+  refreshBlockAnchors();
+  refreshMatches(); // the marks in those rows are new nodes now
+  positionDataChip();
+  scheduleMinimap();
+}
+
+function refreshBlockAnchors() {
+  const b = activeBlock;
+  const head = b && rowFor(b.sl);
+  const tailRow = b && rowFor(b.el);
+  blockStartEl = head ? head.querySelector('.dblk-a') : null;
+  blockEndEl = tailRow ? tailRow.querySelector('.dblk-z') : null;
+}
+
+const KIND_LABEL = { json: 'JSON', xml: 'XML', text: 'Data' };
+
+// The chip sits just past the end of the block, so it reads as belonging to
+// that data and not to the line it happens to share. When the end is scrolled
+// out of sight it falls back to the right-hand edge, level with whatever part
+// of the block is on screen — an action you can't reach is no action at all.
+function positionDataChip() {
+  const b = activeBlock;
+  if (!b) {
+    dataChip.classList.add('hidden');
+    return;
+  }
+  dataChipLabel.textContent = b.pinned ? 'Selection' : KIND_LABEL[b.kind] || 'Data';
+  dataChip.classList.remove('hidden');
+
+  const body = $('out-body').getBoundingClientRect();
+  const w = dataChip.offsetWidth;
+  const h = dataChip.offsetHeight;
+  const end = lastRect(blockEndEl);
+  let left;
+  let top;
+  if (end && end.top >= body.top && end.bottom <= body.bottom) {
+    left = end.right - body.left + 6;
+    top = end.top - body.top - 1;
+  } else {
+    const start = lastRect(blockStartEl);
+    left = Infinity;
+    top = start ? start.top - body.top : 6;
+  }
+  dataChip.style.left = `${Math.max(4, Math.min(left, body.width - w - 22))}px`;
+  dataChip.style.top = `${Math.max(4, Math.min(top, body.height - h - 4))}px`;
+}
+
+// The last of a wrapped element's rects: with Wrap on, a block's final span can
+// fold over several visual lines and only the last one ends where the data does.
+function lastRect(el) {
+  if (!el) return null;
+  const rects = el.getClientRects();
+  return rects.length ? rects[rects.length - 1] : null;
+}
+
+// ---- pointing at a block ----
+function offsetInRow(row, node, offset) {
+  if (node === row) return 0;
+  let total = 0;
+  const walk = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = walk.nextNode())) {
+    if (n === node) return total + offset;
+    if (!n.parentElement.closest('.bm-flag')) total += n.nodeValue.length;
+  }
+  return total;
+}
+
+// Where a DOM point falls in the log: which line, and which character along it.
+// The character matters — a block that starts mid-line must light up only when
+// the pointer is actually on the data, not on the timestamp in front of it.
+function posOf(node, offset) {
+  if (!node) return null;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  const row = el && el.closest ? el.closest('.log-line') : null;
+  if (!row || !row.dataset.n) return null;
+  return { lineNo: Number(row.dataset.n), col: offsetInRow(row, node, offset) };
+}
+
+// The other direction: the text node and offset a line-and-column lands on.
+function pointInRow(row, col) {
+  if (!row) return null;
+  const walk = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  let total = 0;
+  let last = null;
+  let n;
+  while ((n = walk.nextNode())) {
+    if (n.parentElement.closest('.bm-flag')) continue;
+    if (col <= total + n.nodeValue.length) return { node: n, offset: col - total };
+    total += n.nodeValue.length;
+    last = n;
+  }
+  return last ? { node: last, offset: last.nodeValue.length } : { node: row, offset: 0 };
+}
+
+function captureSelection() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  if (!scroller.contains(range.commonAncestorContainer)) return null;
+  const a = posOf(range.startContainer, range.startOffset);
+  const z = posOf(range.endContainer, range.endOffset);
+  return a && z ? { a, z } : null;
+}
+
+function restoreSelection(held) {
+  if (!held) return;
+  const a = pointInRow(rowFor(held.a.lineNo), held.a.col);
+  const z = pointInRow(rowFor(held.z.lineNo), held.z.col);
+  if (!a || !z) return;
+  const range = document.createRange();
+  range.setStart(a.node, a.offset);
+  range.setEnd(z.node, z.offset);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function posFromPoint(x, y) {
+  if (document.caretPositionFromPoint) {
+    const cp = document.caretPositionFromPoint(x, y);
+    return cp ? posOf(cp.offsetNode, cp.offset) : null;
+  }
+  if (document.caretRangeFromPoint) {
+    const r = document.caretRangeFromPoint(x, y);
+    return r ? posOf(r.startContainer, r.startOffset) : null;
+  }
+  return null;
+}
+
+// Leaving a block doesn't drop it straight away: the copy chip sits a few
+// pixels past the end of the data, and the pointer has to cross that gap.
+let hoverClearTimer = null;
+function scheduleBlockClear() {
+  if (hoverClearTimer || !activeBlock || activeBlock.pinned) return;
+  hoverClearTimer = setTimeout(() => {
+    hoverClearTimer = null;
+    if (!activeBlock || !activeBlock.pinned) setActiveBlock(null);
+  }, 220);
+}
+
+scroller.addEventListener('mousemove', (e) => {
+  // A pinned block came from the reader's own selection and outranks whatever
+  // the pointer happens to sweep over on its way to the copy chip.
+  if (!dataOn || (activeBlock && activeBlock.pinned)) return;
+  const pos = posFromPoint(e.clientX, e.clientY);
+  const hit = pos ? blockAt(pos.lineNo, pos.col) : null;
+  if (hit) {
+    clearTimeout(hoverClearTimer);
+    hoverClearTimer = null;
+    setActiveBlock(hit);
+  } else {
+    scheduleBlockClear();
+  }
+});
+
+dataChip.addEventListener('mouseenter', () => {
+  clearTimeout(hoverClearTimer);
+  hoverClearTimer = null;
+});
+dataChip.addEventListener('mouseleave', scheduleBlockClear);
+// Pressing the chip must not collapse the reader's selection — Ctrl+C after it
+// should still copy exactly what they had selected.
+dataChip.addEventListener('mousedown', (e) => e.preventDefault());
+dataChip.addEventListener('click', async () => {
+  if (!activeBlock) return;
+  await navigator.clipboard.writeText(blockText(activeBlock));
+  const was = dataChipLabel.textContent;
+  dataChipLabel.textContent = 'Copied';
+  setTimeout(() => { dataChipLabel.textContent = was; }, 1200);
+});
+
+// ---- selection as the correction ----
+// Detection is a guess, and on a log full of half-escaped output it will
+// sometimes guess wrong. So the reader gets the last word: select any part of
+// the data and the viewer looks outwards from the selection for a structure
+// that contains it, broken syntax and all. Ctrl+C still copies precisely what
+// was selected; the chip copies the whole block that was worked out from it.
+const SEL_WINDOW = 400; // lines either side of the selection worth searching
+
+let selTimer = null;
+// Held back until the drag ends. Expanding mid-drag would relay the selection
+// under the reader's own mouse button while they're still choosing where it
+// ends, and every extra character would do it again.
+let dragging = false;
+
+function scheduleSelectionCheck(delay) {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(handleSelection, delay);
+}
+
+scroller.addEventListener('mousedown', () => { dragging = true; });
+window.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  if (dataOn) scheduleSelectionCheck(30);
+});
+document.addEventListener('selectionchange', () => {
+  if (!dataOn || dragging) return;
+  scheduleSelectionCheck(200);
+});
+
+function unpin() {
+  if (activeBlock && activeBlock.pinned) setActiveBlock(null);
+}
+
+function handleSelection() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) {
+    unpin();
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  if (!scroller.contains(range.commonAncestorContainer)) return;
+
+  const text = sel.toString();
+  if (text.trim().length < 2) {
+    unpin();
+    return;
+  }
+  const from = posOf(range.startContainer, range.startOffset);
+  const to = posOf(range.endContainer, range.endOffset);
+  if (!from || !to) return;
+  const found = expandSelection(from, to);
+  if (!found) return;
+
+  // A structure found around the selection speaks for itself — a bare `5432`
+  // inside an XML document is still a request for that document. The
+  // whole-lines fallback has no such backing, so it's only offered when the
+  // selection itself looks like data; otherwise picking a word out of a
+  // sentence would shade the sentence.
+  if (found.kind === 'text' && !(/[{}[\]<>":=,]/.test(text) || text.includes('\n'))) {
+    unpin();
+    return;
+  }
+  setActiveBlock(found);
+}
+
+function expandSelection(a, z) {
+  const from = Math.max(firstLineNo, a.lineNo - SEL_WINDOW);
+  const to = Math.min(lastLineNo(), z.lineNo + SEL_WINDOW);
+  const starts = [];
+  const parts = [];
+  let off = 0;
+  for (let n = from; n <= to; n++) {
+    const text = lineTextByNo(n);
+    if (text === null) break;
+    starts.push(off);
+    parts.push(text);
+    off += text.length + 1;
+  }
+  if (a.lineNo - from >= starts.length || z.lineNo - from >= starts.length) return null;
+
+  const text = parts.join('\n');
+  const b = window.DataBlocks.expand(text, starts[a.lineNo - from] + a.col, starts[z.lineNo - from] + z.col);
+  if (!b) return null;
+  const sl = lineOfOffset(starts, b.start);
+  const el = lineOfOffset(starts, Math.max(b.start, b.end - 1));
+  return {
+    kind: b.kind,
+    sl: from + sl,
+    sc: b.start - starts[sl],
+    el: from + el,
+    ec: b.end - starts[el],
+    pinned: true,
+  };
+}
 
 // ---- floating panel ----
 function renderPanel() {
@@ -582,6 +1121,7 @@ scroller.addEventListener('mouseover', (e) => {
   positionBookmarkWidget(hoveredLineNo, row);
 });
 $('out-body').addEventListener('mouseleave', () => {
+  scheduleBlockClear();
   if (isEditing()) return;
   hoveredLineNo = null;
   bmWidget.classList.add('hidden');
@@ -714,6 +1254,23 @@ persistedToggle($('out-wrap'), 'out.wrap', true, (on) => {
   if (following) scroller.scrollTop = scroller.scrollHeight;
   scheduleMinimap();
 });
+// The way out when detection guesses badly on an unusual log: turn it off and
+// the shading, the chip and the ruler rails all go with it.
+persistedToggle($('out-data'), 'out.data', true, (on) => {
+  dataOn = on;
+  $('out-data').title = on ? 'Stop detecting structured data' : 'Detect JSON/XML blocks in the log';
+  if (on) {
+    resetBlocks();
+    scheduleDetect();
+  } else {
+    blocks = [];
+    setActiveBlock(null);
+  }
+  if (committed.length || tail) {
+    updateStatus();
+    scheduleMinimap();
+  }
+});
 persistedToggle($('out-numbers'), 'out.numbers', false, (on) => {
   scroller.classList.toggle('show-numbers', on);
   if (following) scroller.scrollTop = scroller.scrollHeight;
@@ -783,6 +1340,7 @@ scroller.addEventListener('scroll', () => {
   updateJumpButton();
   updateViewportBox();
   if (hoveredLineNo !== null) positionBookmarkWidget(hoveredLineNo);
+  if (activeBlock) positionDataChip();
 });
 jumpBtn.addEventListener('click', () => {
   following = true;
@@ -796,6 +1354,10 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     searchField.focus();
     searchField.select();
+  } else if (e.key === 'Escape' && activeBlock && activeBlock.pinned) {
+    // Only ever drops the block the reader pinned, so Escape in the search box
+    // still means "clear the search".
+    setActiveBlock(null);
   }
 });
 

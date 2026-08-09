@@ -38,6 +38,7 @@
 
     <div class="tool-group push-right">
       <button id="out-numbers" class="chip-btn" title="Show line numbers">#</button>
+      <button id="out-data" class="chip-btn" title="Detect JSON/XML blocks in the log">Data</button>
       <button id="out-wrap" class="chip-btn" title="Wrap long lines">Wrap</button>
       <button id="out-markup" class="chip-btn" title="Show highlights and bookmarks, or the plain original log">Markup</button>
       <button id="out-settings" class="chip-btn" title="Highlight &amp; bookmark settings">Settings</button>
@@ -65,6 +66,18 @@
         <input id="out-bm-comment" class="bm-comment" type="text" placeholder="Add a comment…" />
       </div>
     </div>
+
+    <!-- Copy control for the structured-data block under the pointer. Anchored
+         just past the end of the block, so it belongs to the data rather than
+         to the row it shares. -->
+    <button id="out-data-copy" class="data-copy hidden" title="Copy this whole data block">
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+        <rect x="5.4" y="2.4" width="8.2" height="10.2" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/>
+        <path d="M10.6 13.6v.3a1.5 1.5 0 0 1-1.5 1.5H3.9a1.5 1.5 0 0 1-1.5-1.5V5.6a1.5 1.5 0 0 1 1.5-1.5h.3"
+              fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+      <span id="out-data-kind">JSON</span>
+    </button>
 
     <!-- The overview ruler: highlight bars on a canvas, bookmarks as fixed-size
          icons over the top, and the viewport box. Doubles as the scrollbar. -->
@@ -99,6 +112,7 @@
   <div id="out-status">
     <span id="out-linecount">0 lines</span>
     <span id="out-filterinfo"></span>
+    <span id="out-datacount"></span>
   </div>
 
   <div id="out-stdin" class="stdin-row hidden">
@@ -123,6 +137,7 @@
     </div>
   </div>
 
+  <script src="/dataBlocks.js"></script>
   <script src="/highlightEditor.js"></script>
   <script src="/output.js"></script>
 </body>
