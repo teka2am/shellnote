@@ -102,6 +102,8 @@ body {
   color: var(--muted);
   margin-left: 4px;
 }
+#header-meta a { color: var(--muted); }
+#header-meta a:hover { color: var(--accent); }
 
 #theme-toggle-btn .icon-sun { display: none; }
 :root[data-theme="light"] #theme-toggle-btn .icon-moon { display: none; }

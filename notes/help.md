@@ -1,7 +1,5 @@
 # Help
 
-The same manual as the **?** button in the header, as a note you can read, search and edit like any other. Delete it whenever you like — the **?** button always has the current copy.
-
 ## What shellnote is
 
 A local notebook for runnable Markdown notes. Notes are plain `.md` files; every fenced code block tagged `powershell`, `cmd`, `bash` or `gitbash` becomes a cell you can run with one click. The server binds to `127.0.0.1` only — nothing is reachable from the network.
@@ -77,3 +75,16 @@ Blocks are otherwise stateless — each **Run** is a fresh process, so environme
 ## Your data
 
 Notes live in your notes folder, shown at the top of the sidebar. Settings and run logs live in the app data folder. Both are shown and changeable in **Settings**, and notes are never touched by anything there.
+
+## License
+
+shellnote is free software under the **GNU AGPL v3.0 or later**.
+
+| You want to… | Allowed? |
+|:-------------|:---------|
+| Use it, at home or at work | Yes, at no cost |
+| Modify it and keep the changes to yourself | Yes, nothing owed |
+| Distribute it, or a product built on it | Yes, but that source must stay AGPL |
+| Run a modified version as a network service | Yes, but its users must be offered the source |
+
+The **Source** link in the header goes to the full code; the `LICENSE` file has the terms. Versions up to v1.8.0 were MIT and stay available under those terms.

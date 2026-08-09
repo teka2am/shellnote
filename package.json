@@ -1,11 +1,11 @@
 {
   "name": "shellnote",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "A local web notebook for running PowerShell/cmd/bash blocks from Markdown notes.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "author": "klam"
 }

@@ -42,7 +42,16 @@ let defaultShell = 'bash'; // shell a new code block starts as, per the server's
 async function loadMeta() {
   const meta = await fetch('/api/meta').then((r) => r.json());
   document.getElementById('app-version').textContent = `v${meta.version}`;
-  document.getElementById('header-meta').textContent = `${meta.license} License · ${meta.author}`;
+  // AGPL §13 asks a network-interacting program to offer its users the source;
+  // the FSF's suggested way is a "Source" link in the interface itself.
+  const headerMeta = document.getElementById('header-meta');
+  headerMeta.textContent = `${meta.license} · ${meta.author} · `;
+  const sourceLink = document.createElement('a');
+  sourceLink.href = 'https://github.com/teka2am/shellnote';
+  sourceLink.target = '_blank';
+  sourceLink.rel = 'noopener';
+  sourceLink.textContent = 'Source';
+  headerMeta.appendChild(sourceLink);
   serverStartTime = meta.serverStartTime || 0;
   defaultNotesFolder = meta.defaultNotesFolder;
   homeDir = meta.homeDir || '';

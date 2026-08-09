@@ -116,3 +116,20 @@ Shows every execution across **all** notes — running and recently finished (la
 - Blocks are otherwise stateless: each **Run** spawns a fresh shell process — environment variables do not carry over between blocks; only the working directory is threaded through as described above.
 - Saving serializes the note's blocks back to Markdown; exact original spacing/formatting outside of block content isn't preserved byte-for-byte.
 - No auth — this is a single-user local tool.
+
+## License
+
+Copyright © 2026 teka2am. Licensed under the [GNU Affero General Public License v3.0 or later](LICENSE).
+
+In plain terms:
+
+- **Use it freely**, including at work and inside a company, at no cost.
+- **Modify it freely.** If you keep your changes to yourself, you owe nothing.
+- **If you distribute it, or a product built on it, the source must be AGPL too** — you can't take this code closed.
+- **If you run a modified version as a network service**, you must offer its source to that service's users (AGPL §13).
+
+Versions up to and including v1.8.0 were released under the MIT License and remain available under those terms; the AGPL applies from v1.9.0 onward.
+
+### Commercial licensing
+
+If the AGPL's terms don't work for you — for example you want to build a closed-source product on this code — a separate commercial license can be arranged. Open an issue on the repository to get in touch.
