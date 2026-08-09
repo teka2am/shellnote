@@ -752,6 +752,46 @@ function makeInsertDivider(index) {
 
 const ICON_TEXT = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h16M4 11h16M4 16h10"/></svg>';
 const ICON_CODE = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg>';
+const ICON_CODE_SMALL = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg>';
+
+// Markdown source -> the plain text inside it. Converting prose to a runnable
+// block should hand the shell the words, not the markup: a line like
+// "- run `npm ci`" becomes "run npm ci".
+function markdownToPlainText(md) {
+  return (md || '')
+    .split('\n')
+    .map((line) => line
+      .replace(/^\s{0,3}#{1,6}\s+/, '') // heading marker
+      .replace(/^\s{0,3}>\s?/, '') // blockquote
+      .replace(/^\s*[-*+]\s+/, '') // bullet
+      .replace(/^\s*\d+[.)]\s+/, '') // numbered item
+      .replace(/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/, '') // horizontal rule
+      .replace(/^\s*```.*$/, '')) // code fence markers
+    .join('\n')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // image -> alt text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // link -> label
+    .replace(/`([^`]+)`/g, '$1') // inline code
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+    .replace(/\*([^*]+)\*/g, '$1') // italic
+    .replace(/~~([^~]+)~~/g, '$1') // strikethrough
+    .trim();
+}
+
+// Replace a prose section with a code block holding its plain text. Opens the
+// new block for editing so the shell dropdown is right there to adjust.
+function convertProseToBlock(item) {
+  const idx = currentItems.indexOf(item);
+  if (idx === -1) return;
+  currentItems.splice(idx, 1, {
+    type: 'block',
+    shell: defaultShell,
+    code: markdownToPlainText(item.text),
+    _justAdded: true,
+  });
+  renderNoteItems();
+  markDirty();
+  showToast('Converted to a code block');
+}
 
 // Two big targets shown at the boundary the user clicked: pick what to insert.
 // It's transient UI state (not an item in currentItems), so cancelling leaves
@@ -850,12 +890,17 @@ function renderProse(item) {
   editBtn.className = 'gutter-btn';
   editBtn.textContent = '✎';
   editBtn.title = 'Edit text (or double-click it)';
+  const convertBtn = document.createElement('button');
+  convertBtn.className = 'gutter-btn';
+  convertBtn.innerHTML = ICON_CODE_SMALL;
+  convertBtn.title = 'Convert to a code block (Markdown formatting is dropped)';
+  convertBtn.addEventListener('click', () => convertProseToBlock(item));
   const removeBtn = document.createElement('button');
   removeBtn.className = 'gutter-btn gutter-remove';
   removeBtn.textContent = '×';
   removeBtn.title = 'Remove this text';
   removeBtn.addEventListener('click', () => removeItem(item));
-  gutter.append(handle, editBtn, removeBtn);
+  gutter.append(handle, editBtn, convertBtn, removeBtn);
   attachDragHandlers(wrap, item, handle);
 
   const view = document.createElement('div');

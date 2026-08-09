@@ -368,6 +368,7 @@ body {
 }
 .gutter-btn:hover { color: var(--text); background: var(--panel); }
 .gutter-btn.gutter-remove:hover { color: var(--fail); }
+.gutter-btn svg { display: block; }
 
 .prose-view { line-height: 1.6; min-height: 1em; }
 .prose-view > :first-child { margin-top: 0; }
