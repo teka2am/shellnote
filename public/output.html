@@ -7,16 +7,123 @@
 </head>
 <body class="out-page">
   <div id="out-header">
+    <button id="out-bar-toggle" class="icon-btn" title="Hide the toolbar">
+      <svg viewBox="0 0 16 16" width="15" height="15" xmlns="http://www.w3.org/2000/svg">
+        <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+          <line x1="2.5" y1="4" x2="13.5" y2="4"/>
+          <line x1="2.5" y1="8" x2="13.5" y2="8"/>
+          <line x1="2.5" y1="12" x2="13.5" y2="12"/>
+        </g>
+      </svg>
+    </button>
     <span class="status-dot" id="out-dot"></span>
     <span id="out-meta"></span>
     <button id="out-kill" class="kill-btn hidden">Kill</button>
   </div>
-  <pre id="out-full"></pre>
+
+  <div id="out-toolbar">
+    <div class="tool-group search-group">
+      <input id="out-search" class="search-input" type="search" placeholder="Search log… (Ctrl+F)" />
+      <button id="out-regex" class="chip-btn" title="Match as a regular expression">.*</button>
+      <button id="out-case" class="chip-btn" title="Match case">Aa</button>
+      <span id="out-matches" class="match-count">0/0</span>
+      <button id="out-prev" class="chip-btn" title="Previous match (Shift+Enter)">&lsaquo;</button>
+      <button id="out-next" class="chip-btn" title="Next match (Enter)">&rsaquo;</button>
+      <label class="tool-check" title="Hide lines that don't match">
+        <input type="checkbox" id="out-only" />Only matches
+      </label>
+    </div>
+
+    <span class="tool-sep"></span>
+
+    <div class="tool-group push-right">
+      <button id="out-numbers" class="chip-btn" title="Show line numbers">#</button>
+      <button id="out-wrap" class="chip-btn" title="Wrap long lines">Wrap</button>
+      <button id="out-markup" class="chip-btn" title="Show highlights and bookmarks, or the plain original log">Markup</button>
+      <button id="out-settings" class="chip-btn" title="Highlight &amp; bookmark settings">Settings</button>
+      <button id="out-copy" class="chip-btn" title="Copy the visible log to the clipboard">Copy</button>
+      <button id="out-save" class="chip-btn" title="Download the visible log as a .log file">Save</button>
+    </div>
+  </div>
+
+  <div id="out-body">
+    <div id="out-full" class="wrap-on">
+      <div id="out-lines"></div>
+    </div>
+
+    <!-- Floating bookmark control: one element that follows the hovered line,
+         rather than a gutter widget baked into every one of 20k rows. -->
+    <div id="out-bm" class="hidden">
+      <button id="out-bm-btn" class="bm-btn" title="Pick a colour to bookmark this line">
+        <svg viewBox="0 0 16 16" width="17" height="17" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 2.5h8a.5.5 0 0 1 .5.5v10.2a.4.4 0 0 1-.62.34L8 11.1l-3.88 2.44a.4.4 0 0 1-.62-.34V3a.5.5 0 0 1 .5-.5Z"
+                fill="currentColor" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div id="out-bm-panel" class="bm-panel">
+        <div id="out-bm-colors" class="bm-colors"></div>
+        <input id="out-bm-comment" class="bm-comment" type="text" placeholder="Add a comment…" />
+      </div>
+    </div>
+
+    <!-- The overview ruler: highlight bars on a canvas, bookmarks as fixed-size
+         icons over the top, and the viewport box. Doubles as the scrollbar. -->
+    <div id="out-minimap">
+      <canvas id="out-minimap-canvas"></canvas>
+      <div id="out-minimap-marks"></div>
+      <div id="out-viewport"></div>
+    </div>
+
+    <div id="out-panel-zone"></div>
+    <div id="out-panel">
+      <div class="panel-section">
+        <div class="panel-title">
+          Highlights
+          <span class="panel-actions">
+            <button id="panel-all" type="button" title="Show every highlight and other lines">All</button>
+            <button id="panel-none" type="button" title="Hide every highlight and other lines">None</button>
+          </span>
+        </div>
+        <div id="panel-highlights"></div>
+        <div id="panel-others"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">Bookmarks</div>
+        <div id="panel-bookmarks"></div>
+      </div>
+    </div>
+
+    <button id="out-jump" class="jump-btn hidden">Jump to latest &darr;</button>
+  </div>
+
+  <div id="out-status">
+    <span id="out-linecount">0 lines</span>
+    <span id="out-filterinfo"></span>
+  </div>
+
   <div id="out-stdin" class="stdin-row hidden">
     <input id="out-stdin-input" class="stdin-input" type="text" placeholder="Send input to the running process… (Enter)" />
     <button id="out-stdin-send" class="toggle-btn">Send</button>
     <button id="out-stdin-eof" class="toggle-btn" title="Close stdin (like Ctrl+D) — for commands that read until end-of-input">End input</button>
   </div>
+
+  <div id="out-settings-modal" class="modal-overlay hidden">
+    <div class="modal settings-modal">
+      <div class="modal-header">
+        <h2>Highlights</h2>
+        <button id="out-settings-close" class="icon-btn" title="Close">
+          <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+            <path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M3 3l10 10M13 3 3 13"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="out-hl-root"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/highlightEditor.js"></script>
   <script src="/output.js"></script>
 </body>
 </html>

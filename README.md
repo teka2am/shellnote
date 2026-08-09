@@ -94,6 +94,39 @@ Reload the note in the browser to pick up external edits.
 
 Drag notes to arrange them; the sort button restores A–Z (greyed out when the list already is). Hover a note and click its star to add it to **Quick access**, a collapsible section above the list that stays hidden until something is starred. Both the arrangement and the Quick access set are remembered per notes folder.
 
+### Reading a log (pop-out)
+
+A block's own output stays a plain scrolling transcript. **Pop out** — from a block header, or **View** in the Processes tab — opens that same run in a log viewer meant for output too long to skim, and works on a live run or a finished one.
+
+Highlights and bookmarks only ever add a background or a margin marker. **The log's own text is never recoloured or rewritten**, so nothing a command actually printed is misrepresented.
+
+- **Search** as plain text or a regular expression (`.*`), with `Aa` for case sensitivity, `‹` `›` to step through hits (Enter / Shift+Enter), and **Only matches** to hide every non-matching line. Ctrl+F focuses the box, Esc clears it.
+- **Highlights** colour the background of any line containing one of their keywords, configured in Settings (see below) or per-run from the pop-out's own **Settings** button.
+- **Bookmarks** — hover any line and a hollow bookmark icon appears at its left edge. Click it to bookmark the line in the default colour, or hover it to expand five colours plus a comment box; clicking a filled icon removes the bookmark. A bookmarked line keeps that icon, in its colour, in the left gutter. A commented line shows its note on hover, and on the ruler mark's tooltip. Bookmarks and comments save themselves and come back when you next open that run.
+- **The right-hand ruler** replaces the scrollbar. It shows every highlighted line as a coloured bar and every bookmark as a fixed-size mark, so a 20,000-line run is one glance. Click to jump, drag to scrub, and hover to widen it — the bookmark marks deliberately keep their size so they don't move under the pointer.
+- **The panel** appears when you hover the top-right corner: every highlight with its count, each one a toggle that hides those lines, plus **Other lines** for everything neither highlighted nor bookmarked. **All** / **None** flip the whole set at once. Bookmark colours are listed below with their own counts and toggles, so you can strip a run down to just what you marked.
+- **Following** releases the moment you scroll up or step through matches, so incoming output can't drag the view away while you read; **Jump to latest** resumes it.
+- **Markup** controls the highlight backgrounds and nothing else — with it off the text reads exactly as the process emitted it, while the bookmark icons on the left and the ruler on the right carry on working. It starts **off** until this log's highlights have been configured, since the seeded keywords otherwise paint nearly every line. The search controls end with an **Only matches** checkbox and are divided from the rest of the toolbar.
+- `#` shows line numbers (they aren't included when you copy), **Wrap** switches between wrapped lines and a horizontal scroll, **Copy** / **Save** take exactly what the current filters leave visible, and the button at the far left of the header hides the toolbar for more log.
+
+### Log highlights
+
+**Settings → Log highlights** defines the keyword highlights the pop-out log viewer uses. A line containing one of a highlight's keywords gets that highlight's background colour; the log's own text is never recoloured, so nothing a command actually printed is misrepresented.
+
+Pick a highlight from the list to edit it on the right: name, colour, its keywords (added and removed one chip at a time), and whether it must match whole words (so `pass` doesn't match `password`) or an exact case. A preview shows a matching line as it will actually appear. A dot next to a highlight means it differs from the built-in default — everything else keeps following the defaults rather than being frozen as a copy, and **Reset to defaults** clears the lot.
+
+The **Colour theme** sets how strong the colours are: **Friendly** is soft pastel, **High contrast** is stronger and more saturated.
+
+Everything in that dialog is **global**. **Settings** in the pop-out toolbar opens the same editor with an extra **Applies to** choice per highlight:
+
+| Applies to | Affects | Beats |
+|:-----------|:--------|:------|
+| This log only | that one run | This note |
+| This note | every run started from that note | Everywhere |
+| Everywhere | all runs | the built-in defaults |
+
+A line only ever gets one highlight, and the narrower scope wins — so a rule you add for a single log beats a broad global one like `error`. Without that, the seeded keywords would swallow every line and a rule written for one run could never show up.
+
 ### Interactive input
 
 While a block is running, an input row appears under its output — type a response and press Enter to send it to the process (`read`, `Read-Host`, `set /p`, y/n prompts). **End input** closes stdin for commands that read until end-of-input. The pop-out output window has the same row.
@@ -103,6 +136,8 @@ Input mode is **basic** (pipe) by default: line prompts work as-is, but programs
 ### Processes tab
 
 Shows every execution across **all** notes — running and recently finished (last 50) — with note, block number, shell, status, start time, and duration. Running processes show a **Kill** button here too, so you can monitor and stop anything without switching back to its note. The tab label shows a badge with the current running count.
+
+Every row carries a **Comment** — your own note on that run ("prod deploy", "flaky, retried"). Double-click the cell or the pencil that appears on hover to edit it, Enter to save, Esc to cancel; long text truncates in the table and shows in full on hover. Comments are stored with the run and survive a restart.
 
 ### Where blocks run
 

@@ -97,13 +97,18 @@ body {
   padding: 0 16px;
 }
 
-#header-meta {
-  font-size: 11px;
+/* ---- About tab ---- */
+.about-head { display: flex; align-items: baseline; gap: 8px; }
+.about-name { font-size: 18px; font-weight: 600; }
+.about-version { font-size: 12px; color: var(--muted); font-family: Consolas, Menlo, monospace; }
+.about-tagline {
+  font-size: 12px;
   color: var(--muted);
-  margin-left: 4px;
+  line-height: 1.5;
+  margin: 6px 0 18px;
 }
-#header-meta a { color: var(--muted); }
-#header-meta a:hover { color: var(--accent); }
+.settings-value a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.settings-value a:hover { text-decoration: underline; }
 
 #theme-toggle-btn .icon-sun { display: none; }
 :root[data-theme="light"] #theme-toggle-btn .icon-moon { display: none; }
@@ -186,6 +191,248 @@ body {
   padding-top: 6px;
   border-top: 1px solid var(--border);
 }
+/* ---- settings modal tabs ---- */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.modal-tab:hover { color: var(--text); }
+.modal-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.modal-body.hidden { display: none; }
+
+/* ---- highlight editor: list + detail ---- */
+/* The settings dialog is wider than the other modals because this tab is a
+   two-pane editor, not a stack of single-value rows. */
+.modal.settings-modal { width: 720px; }
+
+.hl-intro { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+
+.hl-theme-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.hl-theme-hint { font-size: 11.5px; color: var(--muted); flex: 1; min-width: 0; }
+
+/* Fixed height on purpose: the dialog must not resize as you click between
+   highlights. Content that varies (the keyword box, a long list) scrolls
+   inside its own pane instead of pushing the modal taller. */
+.hl-layout { display: flex; gap: 14px; align-items: stretch; height: 420px; }
+
+.hl-list-pane { width: 190px; flex: none; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.hl-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  background: var(--bg);
+}
+.hl-list-empty { font-size: 12px; color: var(--muted); padding: 10px; }
+
+.hl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+}
+.hl-item:hover { background: var(--panel); transform: none; filter: none; }
+.hl-item.selected { background: var(--accent); color: #fff; }
+.hl-item.selected .hl-item-count { color: rgba(255, 255, 255, 0.75); }
+.hl-item.off .hl-item-name { text-decoration: line-through; opacity: 0.6; }
+.hl-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-item-count { font-size: 11px; color: var(--muted); font-family: Consolas, Menlo, monospace; }
+.hl-item-mod { color: var(--warning); font-weight: 700; line-height: 1; }
+
+/* In the pop-out the editor can store a rule at three levels, so the list
+   badges which one each rule came from. */
+.hl-item-scope {
+  flex: none;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  opacity: 0.8;
+}
+.hl-item-scope.scope-log { color: var(--accent); }
+.hl-item-scope.scope-note { color: var(--ok); }
+.hl-item-scope.scope-global { color: var(--muted); }
+.hl-item.selected .hl-item-scope { color: #fff; }
+
+.hl-scope {
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  outline: none;
+}
+
+/* Highlights are translucent, so a swatch only tells the truth if it sits on
+   the same background the log does — on the panel they'd read as muddy, and on
+   white as far paler than they'll actually look. The colour itself is layered
+   in from JS as a background-image over this base. */
+.hl-dot,
+.hl-swatch {
+  flex: none;
+  border: 1px solid var(--border);
+  background-color: var(--output-bg);
+}
+.hl-dot { width: 13px; height: 13px; border-radius: 50%; }
+
+.hl-add {
+  flex: none;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.hl-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.hl-detail {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hl-field { display: flex; flex-direction: column; gap: 5px; }
+.hl-field-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.hl-name,
+.hl-chip-input,
+#hl-theme {
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  outline: none;
+}
+.hl-name:focus, .hl-chip-input:focus { border-color: var(--accent); }
+
+.hl-colors { display: flex; flex-wrap: wrap; gap: 6px; }
+.hl-swatch { width: 26px; height: 26px; border-radius: 6px; cursor: pointer; padding: 0; }
+.hl-swatch.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+
+/* Keywords as removable chips rather than one comma-separated string: adding
+   and removing a single word shouldn't mean editing punctuation. */
+.hl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px;
+  background: var(--code-bg);
+  /* Fixed, not max-height: a rule with 2 keywords and one with 15 must occupy
+     the same box, or selecting between them resizes the whole dialog. */
+  height: 88px;
+  align-content: flex-start;
+  overflow-y: auto;
+}
+.hl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 3px 2px 7px;
+  font-size: 11.5px;
+  font-family: Consolas, Menlo, monospace;
+}
+.hl-chip-x {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 3px;
+}
+.hl-chip-x:hover { color: var(--fail); transform: none; filter: none; }
+.hl-chip-input { flex: 1; min-width: 110px; border: none; background: none; padding: 3px 4px; }
+
+.hl-opts { display: flex; flex-wrap: wrap; gap: 12px; }
+.hl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hl-check input { margin: 0; cursor: pointer; }
+
+.hl-preview-line {
+  font-family: Consolas, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hl-preview { background: var(--output-bg); border-radius: 5px; padding: 5px; }
+
+.hl-remove {
+  align-self: flex-start;
+  margin-top: auto;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.hl-remove:hover { color: var(--fail); border-color: var(--fail); }
+
+.hl-footer { display: flex; align-items: center; gap: 10px; }
+.hl-footer .primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.hl-status { flex: 1; font-size: 12px; color: var(--muted); }
+
 .settings-footer .danger {
   background: transparent;
   color: var(--fail);
@@ -803,6 +1050,43 @@ pre.output {
 #proc-table th.sort-asc::after { content: ' \25B2'; font-size: 9px; }
 #proc-table th.sort-desc::after { content: ' \25BC'; font-size: 9px; }
 
+/* Per-run comment: truncated label + an edit button that appears on hover,
+   swapped for a single-line input while editing. */
+.comment-cell { max-width: 220px; }
+.comment-text {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: text;
+}
+.comment-text.empty { color: var(--muted); font-style: italic; opacity: 0.6; }
+.comment-edit-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0;
+}
+.comment-cell:hover .comment-edit-btn, .comment-edit-btn:focus-visible { opacity: 1; }
+.comment-edit-btn:hover { color: var(--accent); }
+.comment-input {
+  width: 100%;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+  outline: none;
+}
+
 .note-link { color: var(--accent); text-decoration: none; }
 .note-link:hover { text-decoration: underline; }
 
@@ -812,31 +1096,396 @@ pre.output {
   70% { box-shadow: 0 0 0 2px var(--accent); }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
-
 #out-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
 #out-meta { color: var(--muted); font-size: 13px; }
 #out-header .kill-btn { margin-left: auto; }
+#out-bar-toggle { flex: none; }
 
-/* The pop-out is a column: header, output (fills), input row (when running). */
+/* The pop-out is a column: header, toolbar, log (fills), status, input row. */
 body.out-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
+
+/* ---- log toolbar ---- */
+#out-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+#out-toolbar.hidden { display: none; }
+.tool-group { display: flex; align-items: center; gap: 4px; }
+.search-group { flex: 1; min-width: 260px; }
+
+.search-input {
+  flex: 1;
+  min-width: 90px;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12.5px;
+  padding: 4px 8px;
+  outline: none;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input.invalid { border-color: var(--fail); }
+
+.chip-btn {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding: 3px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip-btn:hover { color: var(--text); }
+.chip-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.match-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: Consolas, Menlo, monospace;
+  min-width: 42px;
+  text-align: center;
+}
+
+/* Splits the search controls from everything else, so the bar reads as two
+   jobs rather than one long row of buttons. */
+.tool-sep {
+  width: 1px;
+  align-self: stretch;
+  min-height: 18px;
+  background: var(--border);
+}
+
+/* Filters the log rather than changing how the search matches, so it's a
+   checkbox instead of another chip. */
+.tool-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text);
+  white-space: nowrap;
+  cursor: pointer;
+  margin-left: 4px;
+}
+.tool-check input { margin: 0; cursor: pointer; }
+
+/* ---- log body ---- */
+/* Positioned so the overview ruler, the floating panel and the bookmark widget
+   can sit over the log without being inside the scrolling content. */
+#out-body { position: relative; flex: 1; min-height: 0; display: flex; }
+
 #out-full {
   margin: 0;
-  padding: 16px;
-  white-space: pre-wrap;
-  font-size: 13px;
+  padding: 8px 0;
+  font-size: 12.5px;
+  font-family: Consolas, Menlo, monospace;
+  line-height: 1.5;
+  background: var(--output-bg);
   flex: 1;
-  overflow-y: auto;
+  min-width: 0;
+  overflow: auto;
   box-sizing: border-box;
+  /* The overview ruler on the right is the scrollbar. */
+  scrollbar-width: none;
+}
+#out-full::-webkit-scrollbar { width: 0; height: 8px; }
+
+.log-line {
+  /* Left padding reserves room for the bookmark icon and its hover control, so
+     neither ever covers text. */
+  position: relative;
+  padding: 0 56px 0 27px;
+  min-height: 1.5em;
+  white-space: pre;
+  color: var(--text);
+}
+.log-line.hidden { display: none; }
+
+/* A bookmark reads as the bookmark icon itself, in its colour, sitting in the
+   line's left gutter — not a bar down the edge, which looked like just another
+   flavour of highlight. */
+.bm-flag {
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  pointer-events: none;
+}
+
+
+#out-full.wrap-on .log-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Line numbers come from the row's data-n rather than the text, so copying a
+   line still copies just the line. */
+#out-full.show-numbers .log-line::before {
+  content: attr(data-n);
+  display: inline-block;
+  width: 5ch;
+  margin-right: 10px;
+  text-align: right;
+  color: var(--muted);
+  opacity: 0.55;
+  user-select: none;
+}
+
+.log-line mark {
+  background: rgba(91, 141, 239, 0.35);
+  color: inherit;
+  border-radius: 2px;
+}
+.log-line mark.is-current { background: var(--accent); color: #fff; }
+
+/* ---- bookmark control ---- */
+/* One floating widget that follows the hovered line, rather than a gutter
+   baked into every row — at 20k rows that would be 20k extra elements. */
+/* Sized to be an easy target: the icon and its colour swatches are the two
+   things you aim at repeatedly while marking up a log, so they're deliberately
+   larger than the surrounding chrome. The widget is centred on its line and is
+   free to overflow the row height. */
+#out-bm {
+  position: absolute;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  height: 1.5em;
+  padding-left: 2px;
+}
+#out-bm.hidden { display: none; }
+.bm-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.bm-btn:hover { opacity: 1; background: var(--panel); transform: none; filter: none; }
+#out-bm.is-set .bm-btn { opacity: 1; }
+/* Hollow until the line is actually bookmarked: a filled icon on every line you
+   happen to hover reads as "already marked". It fills with the chosen colour
+   only once one is picked. */
+#out-bm:not(.is-set) .bm-btn svg path { fill: none; }
+
+/* The colours and comment stay hidden until the icon itself is hovered.
+   :focus-within keeps the panel up while a comment is being typed — otherwise
+   the field would vanish the moment the pointer drifted off it. */
+.bm-panel {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 8px;
+  margin-left: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+#out-bm:hover .bm-panel,
+#out-bm:focus-within .bm-panel { display: flex; }
+.bm-colors { display: flex; gap: 6px; }
+
+.bm-comment {
+  width: 220px;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11.5px;
+  padding: 4px 7px;
+  outline: none;
+}
+.bm-comment:focus { border-color: var(--accent); }
+.bm-comment:disabled { opacity: 0.5; cursor: not-allowed; }
+.bm-color {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  padding: 0;
+}
+.bm-color:hover { transform: scale(1.2); box-shadow: 0 0 0 2px var(--accent); }
+.bm-color.selected { box-shadow: 0 0 0 2px var(--text); }
+
+/* ---- overview ruler ---- */
+/* Doubles as the scrollbar: thin by default, widening on hover. Bookmark marks
+   deliberately keep their size so they don't jump under the pointer. */
+#out-minimap {
+  position: relative;
+  flex: none;
+  width: 12px;
+  background: var(--output-bg);
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  transition: width 0.12s ease;
+  overflow: hidden;
+}
+#out-minimap:hover { width: 44px; }
+#out-minimap canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.75;
+}
+#out-minimap-marks { position: absolute; inset: 0; }
+
+.bm-mark {
+  position: absolute;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+#out-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--text);
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+/* ---- floating panel ---- */
+#out-panel-zone {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  width: 46px;
+  height: 30px;
+  z-index: 7;
+}
+#out-panel {
+  position: absolute;
+  top: 6px;
+  right: 20px;
+  z-index: 8;
+  min-width: 190px;
+  max-height: 70%;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  padding: 8px;
+  display: none;
+}
+#out-panel-zone:hover + #out-panel,
+#out-panel:hover { display: block; }
+
+.panel-section + .panel-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.panel-actions { margin-left: auto; display: flex; gap: 4px; }
+.panel-actions button {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.panel-actions button:hover { color: var(--text); border-color: var(--accent); }
+
+/* "Other lines" sits with the highlights it belongs beside, but set apart so
+   it reads as the catch-all rather than another rule. */
+#panel-others { margin-top: 3px; padding-top: 3px; border-top: 1px dashed var(--border); }
+.panel-empty { font-size: 11.5px; color: var(--muted); padding: 2px 4px; }
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.panel-row:hover { background: var(--bg); transform: none; filter: none; }
+.panel-row.off { opacity: 0.45; }
+.panel-row.off .panel-name { text-decoration: line-through; }
+.panel-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-count { font-size: 11px; color: var(--muted); font-family: Consolas, Menlo, monospace; }
+.panel-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background-color: var(--output-bg);
+}
+.panel-dot.solid { border-radius: 50%; }
+
+/* ---- follow lock + status ---- */
+.jump-btn {
+  position: absolute;
+  right: 60px;
+  bottom: 16px;
+  z-index: 5;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+.jump-btn.hidden { display: none; }
+
+#out-status {
+  display: flex;
+  gap: 14px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 11px;
+  color: var(--muted);
+  font-family: Consolas, Menlo, monospace;
 }
 
 .help-modal { width: 640px; }

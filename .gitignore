@@ -1,2 +1,6 @@
 .claude/
 CLAUDE.md
+
+# Local manual-test fixture for the pop-out log viewer — noise in the notes
+# folder that ships with the app, so it stays on this machine.
+notes/log-viewer-test.md

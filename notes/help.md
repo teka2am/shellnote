@@ -61,6 +61,8 @@ Input mode is **basic** by default: line prompts work as-is, but programs that r
 
 The **Processes** tab lists every run across all notes — running and recent — with live status, duration, output size, a pop-out window (which also accepts input), Kill and Remove. History survives a server restart.
 
+Each row also has a **Comment** for your own note about the run — double-click the cell, or the pencil that appears on hover, to edit it; Enter saves, Esc cancels. Long text is truncated in the table and shown in full on hover.
+
 ## Shells and platforms
 
 | Tag | Windows | macOS / Linux |
@@ -87,4 +89,4 @@ shellnote is free software under the **GNU AGPL v3.0 or later**.
 | Distribute it, or a product built on it | Yes, but that source must stay AGPL |
 | Run a modified version as a network service | Yes, but its users must be offered the source |
 
-The **Source** link in the header goes to the full code; the `LICENSE` file has the terms. Versions up to v1.8.0 were MIT and stay available under those terms.
+**Settings → About** carries the licence, the author and a **Source** link to the full code; the `LICENSE` file has the terms. Versions up to v1.8.0 were MIT and stay available under those terms.
