@@ -274,10 +274,22 @@ body {
 .note-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-status-dot { flex: none; }
 
-/* Sidebar reordering: the row lands on the edge the bar is drawn on. */
+/* Sidebar reordering: the row lands on the edge the bar is drawn on. Drawn as
+   a pseudo-element rather than a box-shadow so the bar stays straight — a
+   shadow would trace the row's rounded corners and curve at both ends. */
+#note-list .note-item { position: relative; }
 #note-list .note-item.dragging { opacity: 0.4; }
-#note-list .note-item.drop-before { box-shadow: 0 -2px 0 0 var(--accent); }
-#note-list .note-item.drop-after { box-shadow: 0 2px 0 0 var(--accent); }
+#note-list .note-item.drop-before::before,
+#note-list .note-item.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+#note-list .note-item.drop-before::before { top: -1px; }
+#note-list .note-item.drop-after::after { bottom: -1px; }
 
 .icon-btn:disabled { opacity: 0.3; cursor: default; }
 .icon-btn:disabled:hover { background: none; color: var(--muted); transform: none; filter: none; }
