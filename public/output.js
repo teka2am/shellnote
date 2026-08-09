@@ -6,6 +6,23 @@ const dot = document.getElementById('out-dot');
 const meta = document.getElementById('out-meta');
 const full = document.getElementById('out-full');
 const killBtn = document.getElementById('out-kill');
+const stdinRow = document.getElementById('out-stdin');
+const stdinField = document.getElementById('out-stdin-input');
+
+async function sendStdin(eof) {
+  const payload = eof ? { eof: true } : { text: stdinField.value };
+  const res = await fetch(`/api/executions/${execId}/input`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok && !eof) stdinField.value = '';
+}
+document.getElementById('out-stdin-send').addEventListener('click', () => sendStdin(false));
+document.getElementById('out-stdin-eof').addEventListener('click', () => sendStdin(true));
+stdinField.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendStdin(false);
+});
 
 const MAX_OUTPUT_CHARS = 1_000_000;
 let fullOutput = '';
@@ -39,6 +56,7 @@ async function init() {
   if (record.status !== 'running') return;
 
   killBtn.classList.remove('hidden');
+  stdinRow.classList.remove('hidden');
   killBtn.onclick = () => fetch(`/api/executions/${execId}/kill`, { method: 'POST' });
 
   const es = new EventSource(`/api/executions/${execId}/stream`);
@@ -55,6 +73,7 @@ async function init() {
     const { status } = JSON.parse(e.data);
     dot.className = `status-dot ${status}`;
     killBtn.classList.add('hidden');
+    stdinRow.classList.add('hidden');
     full.textContent = fullOutput;
     full.scrollTop = full.scrollHeight;
     es.close();

@@ -29,6 +29,7 @@ let defaultNotesFolder = null; // fallback folder the "reset" button restores
 let serverStartTime = 0; // used to scope status indicators to executions from this server session only
 let runRoot = ''; // where code blocks run, before any in-note cd simulation
 let homeDir = ''; // server user's home — resolves `cd ~` in the cwd simulation
+let ptyAvailable = false; // node-pty installed server-side = full terminal input
 
 // ---- meta (version, license, author) + notes folders ----
 // Two independent notions of "notes folder":
@@ -44,6 +45,10 @@ async function loadMeta() {
   serverStartTime = meta.serverStartTime || 0;
   defaultNotesFolder = meta.defaultNotesFolder;
   homeDir = meta.homeDir || '';
+  ptyAvailable = !!meta.ptyAvailable;
+  document.getElementById('help-input-mode').innerHTML = ptyAvailable
+    ? 'Input mode: <b>full terminal</b> — node-pty is installed, so programs that insist on a real TTY before prompting (ssh, sudo) work too.'
+    : 'Input mode: <b>basic</b> — line-based prompts work as-is. Programs that refuse to prompt without a real TTY (ssh, sudo) need the optional <code>node-pty</code> module: run <code>npm install node-pty</code> in the shellnote folder and restart the server.';
   updateCurrentFolderInfo(meta.notesFolder, meta.isDefaultFolder);
   updateAppDataFolderInfo(meta.appDataDir, meta.isDefaultAppDataDir);
   updateRunRootInfo(meta.runRoot, meta.isDefaultRunRoot);
@@ -104,6 +109,14 @@ document.getElementById('settings-btn').addEventListener('click', openSettings);
 document.getElementById('settings-close-btn').addEventListener('click', closeSettings);
 settingsModal.addEventListener('click', (e) => {
   if (e.target === settingsModal) closeSettings();
+});
+
+// ---- help modal ----
+const helpModal = document.getElementById('help-modal');
+document.getElementById('help-btn').addEventListener('click', () => helpModal.classList.remove('hidden'));
+document.getElementById('help-close-btn').addEventListener('click', () => helpModal.classList.add('hidden'));
+helpModal.addEventListener('click', (e) => {
+  if (e.target === helpModal) helpModal.classList.add('hidden');
 });
 
 document.getElementById('settings-notes-folder-reset-btn').addEventListener('click', async () => {
@@ -943,6 +956,50 @@ function renderBlock(block) {
   outputPre.className = 'output';
   outputPanel.appendChild(outputPre);
 
+  // Input row for the running process — visible only while status is running.
+  // We can't detect "the process is waiting for input" without a PTY, so the
+  // row is simply always available during a run.
+  const stdinRow = document.createElement('div');
+  stdinRow.className = 'stdin-row hidden';
+  const stdinField = document.createElement('input');
+  stdinField.type = 'text';
+  stdinField.className = 'stdin-input';
+  stdinField.placeholder = 'Send input to the running process… (Enter)';
+  const stdinSendBtn = document.createElement('button');
+  stdinSendBtn.className = 'toggle-btn stdin-send-btn';
+  stdinSendBtn.textContent = 'Send';
+  const stdinEofBtn = document.createElement('button');
+  stdinEofBtn.className = 'toggle-btn';
+  stdinEofBtn.textContent = 'End input';
+  stdinEofBtn.title = 'Close stdin (like Ctrl+D) — for commands that read until end-of-input';
+  stdinRow.append(stdinField, stdinSendBtn, stdinEofBtn);
+  if (!ptyAvailable) {
+    const hint = document.createElement('span');
+    hint.className = 'stdin-hint';
+    hint.textContent = 'basic input — see Help';
+    hint.title = 'Line prompts work; TTY-only prompts (ssh, sudo) need node-pty. Click for details.';
+    hint.addEventListener('click', () => document.getElementById('help-btn').click());
+    stdinRow.appendChild(hint);
+  }
+  outputPanel.appendChild(stdinRow);
+
+  async function sendStdin(eof) {
+    if (!block.runningExecId) return;
+    const payload = eof ? { eof: true } : { text: stdinField.value };
+    const res = await fetch(`/api/executions/${block.runningExecId}/input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) showToast((await res.json()).error || 'Failed to send input', 'error');
+    else if (!eof) stdinField.value = '';
+  }
+  stdinSendBtn.addEventListener('click', () => sendStdin(false));
+  stdinEofBtn.addEventListener('click', () => sendStdin(true));
+  stdinField.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendStdin(false);
+  });
+
   renderCodeView();
   wrap.append(header, codeView, codeArea, outputPanel);
 
@@ -1029,6 +1086,7 @@ function renderBlock(block) {
 
   function attachToExecution(execId) {
     ensureExecButtons();
+    stdinRow.classList.remove('hidden');
     killBtn.onclick = async () => {
       const res = await fetch(`/api/executions/${execId}/kill`, { method: 'POST' });
       showToast(res.ok ? 'Process killed' : 'Failed to kill process', res.ok ? 'success' : 'error');
@@ -1045,6 +1103,7 @@ function renderBlock(block) {
     es.addEventListener('done', (e) => {
       dot.className = `status-dot ${JSON.parse(e.data).status}`;
       killBtn.classList.add('hidden');
+      stdinRow.classList.add('hidden');
       if (block.runningExecId === execId) delete block.runningExecId;
       renderOutput();
       es.close();

@@ -37,6 +37,13 @@
           </g>
         </svg>
       </button>
+      <button id="help-btn" class="icon-btn" title="Help">
+        <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          <path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.2 6.2a1.8 1.8 0 1 1 2.6 1.7c-.6.3-.8.7-.8 1.3"/>
+          <circle cx="8" cy="11.4" r="0.9" fill="currentColor"/>
+        </svg>
+      </button>
       <button id="settings-btn" class="icon-btn" title="Settings">
         <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
           <g stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
@@ -121,6 +128,43 @@
         <div class="settings-footer">
           <button id="clear-app-data-btn" class="danger">Clear all app data</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="help-modal" class="modal-overlay hidden">
+    <div class="modal help-modal">
+      <div class="modal-header">
+        <h2>Help</h2>
+        <button id="help-close-btn" class="icon-btn" title="Close">
+          <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+            <path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M3 3l10 10M13 3 3 13"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body help-body">
+        <h3>What is shellnote?</h3>
+        <p>A local notebook for runnable Markdown notes. Notes are plain <code>.md</code> files; every fenced code block tagged <code>powershell</code>, <code>cmd</code>, <code>bash</code>, or <code>gitbash</code> becomes a cell you can run with one click. The server binds to <code>127.0.0.1</code> only — nothing is reachable from the network.</p>
+
+        <h3>Editing notes</h3>
+        <p>Text renders as regular Markdown. Edit a section with the pencil in its hover gutter (or double-click it); hover between sections for a <code>+</code> insert line. The <code>&lt;&gt;</code> toggle in the header switches to a raw Markdown editor for the whole note. Files edited outside the app are picked up on reload.</p>
+
+        <h3>Where blocks run</h3>
+        <p>Each block's header shows the folder it will run in. The starting folder is the <b>Run folder</b> (Settings), defaulting to where the server was started. A <code>cd</code> inside a block shifts the folder of same-shell blocks below it — each shell keeps its own folder lineage, and only forms that shell understands are recognized (<code>cd /d</code>, bare <code>D:</code> for cmd; <code>Set-Location</code> for powershell; case-sensitive <code>cd</code> and <code>~</code> for bash). Targets built from environment variables can't be predicted and are ignored.</p>
+
+        <h3>Interactive input</h3>
+        <p>While a block runs, an input row appears under its output — type a response and press Enter to send it to the process (<code>read</code>, <code>Read-Host</code>, <code>set /p</code>, y/n prompts). <b>End input</b> closes stdin for commands that read until end-of-input.</p>
+        <p id="help-input-mode"></p>
+        <p>Full-screen terminal programs (vim, htop, arrow-key menus) are not supported — the output view is plain text, not a terminal emulator. Note that sent input is echoed into the output and stored in the run log; avoid typing secrets.</p>
+
+        <h3>Processes</h3>
+        <p>The Processes tab lists every run across all notes — running and recent — with live status, duration, View (pop-out window, which also accepts input), Kill, and Remove. History survives server restarts.</p>
+
+        <h3>Shells &amp; platforms</h3>
+        <p><code>cmd</code> and <code>gitbash</code> blocks run on Windows only (git-bash must be installed). <code>bash</code> uses <code>/bin/bash</code> on macOS/Linux and git-bash on Windows. <code>powershell</code> uses <code>powershell.exe</code> on Windows and <code>pwsh</code> elsewhere. Blocks are otherwise stateless — environment variables don't carry between blocks.</p>
+
+        <h3>Your data</h3>
+        <p>Notes live in your notes folder (sidebar). Settings and run logs live in the app data folder — both are shown and changeable in Settings.</p>
       </div>
     </div>
   </div>

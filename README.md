@@ -88,6 +88,12 @@ Get-Date
 
 Reload the note in the browser to pick up external edits.
 
+### Interactive input
+
+While a block is running, an input row appears under its output — type a response and press Enter to send it to the process (`read`, `Read-Host`, `set /p`, y/n prompts). **End input** closes stdin for commands that read until end-of-input. The pop-out output window has the same row.
+
+Input mode is **basic** (pipe) by default: line prompts work as-is, but programs that refuse to prompt without a real TTY (ssh, sudo) won't. Optionally run `npm install node-pty` in the shellnote folder and restart to get full-terminal input — the app auto-detects it; nothing else changes. Full-screen terminal apps (vim, htop) are not supported either way. Sent input is echoed into the output and stored in the run log, so avoid typing secrets. See the in-app **Help** (?) for details.
+
 ### Processes tab
 
 Shows every execution across **all** notes — running and recently finished (last 50) — with note, block number, shell, status, start time, and duration. Running processes show a **Kill** button here too, so you can monitor and stop anything without switching back to its note. The tab label shows a badge with the current running count.

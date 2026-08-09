@@ -4,6 +4,26 @@ const fs = require('fs');
 const path = require('path');
 const configStore = require('./config');
 
+// Optional enhancement: if node-pty is installed (npm install node-pty in the
+// app folder, then restart), blocks run inside a real pseudo-terminal, so
+// programs that insist on a TTY before prompting (ssh, sudo, some CLI wizards)
+// actually show their prompts. Without it everything still works over plain
+// pipes — line-based prompts (read, Read-Host, set /p, y/n questions) are fully
+// usable; only TTY-demanding programs misbehave.
+let pty = null;
+try { pty = require('node-pty'); } catch { /* not installed — pipe mode */ }
+
+// PTY output carries ANSI escape sequences (colors, cursor movement, window
+// titles) that the plain-text output view can't render — strip them, keeping
+// newlines and tabs.
+function stripAnsi(s) {
+  return s
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC (window title etc.)
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '') // CSI (colors, cursor)
+    .replace(/\x1b[()#][0-9A-Za-z]/g, '') // charset selection
+    .replace(/\x1b[@-Z\\-_]/g, ''); // remaining two-byte escapes
+}
+
 // Cap retained output per execution by actual size, not chunk count — a single
 // stdout chunk can be up to ~64KB, so capping by count alone could retain
 // hundreds of MB for a chatty long-running process. That both bloats memory
@@ -110,27 +130,48 @@ function createExecution({ shellPath, args, cwd, noteFile, noteTitle, blockIndex
     outputChars: 0,
     listeners: new Set(),
     child: null,
+    usesPty: false,
   };
   executions.set(execId, record);
+
+  const env = {
+    ...process.env,
+    // Python defaults stdout/stderr to the legacy Windows code page (e.g. cp1252)
+    // when they aren't attached to a real console, which is always true here since
+    // we capture output through a pipe — that breaks on any non-ASCII character.
+    PYTHONIOENCODING: 'utf-8',
+    PYTHONUTF8: '1',
+    // Python block-buffers stdout when it isn't a TTY (always true here), instead of
+    // line-buffering. A script that prints a startup banner and then blocks forever
+    // (e.g. a server loop) may never fill that buffer, so the banner sits unflushed
+    // and never reaches us. Force unbuffered I/O so output streams live as it's printed.
+    PYTHONUNBUFFERED: '1',
+  };
+
+  if (pty) {
+    try {
+      const term = pty.spawn(shellPath, args, { cwd, cols: 120, rows: 30, env });
+      record.pid = term.pid;
+      record.child = term;
+      record.usesPty = true;
+      term.onData((data) => appendOutput(record, stripAnsi(data)));
+      term.onExit(({ exitCode }) => {
+        if (record.status === 'killed') return;
+        finish(record, exitCode === 0 ? 'success' : 'failed', exitCode);
+      });
+      return execId;
+    } catch (err) {
+      // Broken node-pty install (ABI mismatch etc.) — fall through to pipes.
+      appendOutput(record, `[node-pty unavailable: ${err.message} — running without a terminal]\n`);
+    }
+  }
 
   const child = spawn(shellPath, args, {
     cwd,
     windowsHide: true,
     detached: process.platform !== 'win32',
     windowsVerbatimArguments: !!verbatim,
-    env: {
-      ...process.env,
-      // Python defaults stdout/stderr to the legacy Windows code page (e.g. cp1252)
-      // when they aren't attached to a real console, which is always true here since
-      // we capture output through a pipe — that breaks on any non-ASCII character.
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONUTF8: '1',
-      // Python block-buffers stdout when it isn't a TTY (always true here), instead of
-      // line-buffering. A script that prints a startup banner and then blocks forever
-      // (e.g. a server loop) may never fill that buffer, so the banner sits unflushed
-      // and never reaches us. Force unbuffered I/O so output streams live as it's printed.
-      PYTHONUNBUFFERED: '1',
-    },
+    env,
   });
   record.pid = child.pid;
   record.child = child;
@@ -149,6 +190,35 @@ function createExecution({ shellPath, args, cwd, noteFile, noteTitle, blockIndex
   });
 
   return execId;
+}
+
+// ---- interactive input ----
+// Sends one line to a running block's stdin. In pipe mode the process never
+// echoes what it reads, so we mirror the text into the output ourselves to keep
+// the transcript readable; a PTY echoes on its own.
+function sendInput(execId, text) {
+  const record = executions.get(execId);
+  if (!record || record.status !== 'running' || !record.child) return false;
+  if (record.usesPty) {
+    record.child.write(text + '\r'); // Enter in a terminal is CR
+  } else {
+    record.child.stdin.write(text + '\n');
+    appendOutput(record, text + '\n');
+  }
+  return true;
+}
+
+// The Ctrl+D / Ctrl+Z equivalent — for programs that read until end-of-input.
+function closeInput(execId) {
+  const record = executions.get(execId);
+  if (!record || record.status !== 'running' || !record.child) return false;
+  if (record.usesPty) {
+    record.child.write(process.platform === 'win32' ? '\x1a\r' : '\x04');
+  } else {
+    record.child.stdin.end();
+    appendOutput(record, '[input closed]\n');
+  }
+  return true;
 }
 
 function appendOutput(record, text) {
@@ -267,4 +337,4 @@ function subscribe(execId, listener) {
   return () => record.listeners.delete(listener);
 }
 
-module.exports = { createExecution, kill, killAll, list, get, getRaw, subscribe, clearHistory, remove };
+module.exports = { createExecution, kill, killAll, list, get, getRaw, subscribe, clearHistory, remove, sendInput, closeInput, ptyAvailable: !!pty };

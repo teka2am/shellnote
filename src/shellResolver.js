@@ -17,9 +17,11 @@ function findGitBash() {
 function resolveShell(tag) {
   switch (tag) {
     case 'powershell':
+      // No -NonInteractive: it makes Read-Host throw instead of waiting, and
+      // blocks can now receive input while running.
       return isWin
-        ? { shellPath: 'powershell.exe', buildArgs: (code) => ['-NoProfile', '-NonInteractive', '-Command', code] }
-        : { shellPath: 'pwsh', buildArgs: (code) => ['-NoProfile', '-NonInteractive', '-Command', code] };
+        ? { shellPath: 'powershell.exe', buildArgs: (code) => ['-NoProfile', '-Command', code] }
+        : { shellPath: 'pwsh', buildArgs: (code) => ['-NoProfile', '-Command', code] };
 
     case 'cmd':
       if (!isWin) throw new Error('cmd blocks only run on Windows');

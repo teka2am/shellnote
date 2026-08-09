@@ -108,6 +108,7 @@ const server = http.createServer(async (req, res) => {
         isDefaultRunRoot: RUN_ROOT === DEFAULT_RUN_ROOT,
         defaultRunRoot: DEFAULT_RUN_ROOT,
         homeDir: os.homedir(), // lets the client resolve `cd ~` in its cwd simulation
+        ptyAvailable: executor.ptyAvailable, // full-terminal input vs basic pipe input
       });
     }
 
@@ -266,6 +267,17 @@ const server = http.createServer(async (req, res) => {
     if (killMatch && req.method === 'POST') {
       const ok = executor.kill(killMatch[1]);
       return sendJson(res, ok ? 200 : 404, { killed: ok });
+    }
+
+    const inputMatch = p.match(/^\/api\/executions\/([^/]+)\/input$/);
+    if (inputMatch && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      const ok = body.eof
+        ? executor.closeInput(inputMatch[1])
+        : executor.sendInput(inputMatch[1], String(body.text ?? ''));
+      return ok
+        ? sendJson(res, 200, { ok: true })
+        : sendJson(res, 409, { error: 'Process is not running' });
     }
 
     const streamMatch = p.match(/^\/api\/executions\/([^/]+)\/stream$/);

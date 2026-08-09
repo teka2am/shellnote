@@ -570,6 +570,40 @@ pre.code code { white-space: pre; }
 .output-panel { border-top: 1px solid var(--border); }
 .output-panel.hidden { display: none; }
 
+/* Input row for a running process (block panel + pop-out window). */
+.stdin-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--output-bg);
+}
+.stdin-row.hidden { display: none; }
+.stdin-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  outline: none;
+}
+.stdin-input:focus { border-color: var(--accent); }
+.stdin-row .toggle-btn { margin-left: 0; flex: none; }
+.stdin-hint {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  white-space: nowrap;
+}
+.stdin-hint:hover { color: var(--text); }
+
 #toast-container {
   position: fixed;
   bottom: 18px;
@@ -656,12 +690,25 @@ pre.output {
 #out-meta { color: var(--muted); font-size: 13px; }
 #out-header .kill-btn { margin-left: auto; }
 
+/* The pop-out is a column: header, output (fills), input row (when running). */
+body.out-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
 #out-full {
   margin: 0;
   padding: 16px;
   white-space: pre-wrap;
   font-size: 13px;
-  height: calc(100vh - 45px);
+  flex: 1;
   overflow-y: auto;
   box-sizing: border-box;
 }
+
+.help-modal { width: 640px; }
+.help-body { max-height: 70vh; overflow-y: auto; font-size: 13px; line-height: 1.55; }
+.help-body h3 { margin: 16px 0 6px; font-size: 13.5px; }
+.help-body h3:first-child { margin-top: 0; }
+.help-body p { margin: 6px 0; }
+.help-body code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }

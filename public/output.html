@@ -5,13 +5,18 @@
 <title>shellnote — output</title>
 <link rel="stylesheet" href="/style.css" />
 </head>
-<body>
+<body class="out-page">
   <div id="out-header">
     <span class="status-dot" id="out-dot"></span>
     <span id="out-meta"></span>
     <button id="out-kill" class="kill-btn hidden">Kill</button>
   </div>
   <pre id="out-full"></pre>
+  <div id="out-stdin" class="stdin-row hidden">
+    <input id="out-stdin-input" class="stdin-input" type="text" placeholder="Send input to the running process… (Enter)" />
+    <button id="out-stdin-send" class="toggle-btn">Send</button>
+    <button id="out-stdin-eof" class="toggle-btn" title="Close stdin (like Ctrl+D) — for commands that read until end-of-input">End input</button>
+  </div>
   <script src="/output.js"></script>
 </body>
 </html>
