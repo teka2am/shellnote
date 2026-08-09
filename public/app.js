@@ -411,6 +411,10 @@ function renderMarkdownInline(s) {
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) => `<a href="${safeUrl(url)}" target="_blank" rel="noopener">${label}</a>`);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Underscore emphasis, which many editors produce by default. Only when the
+  // underscores sit at a word boundary, so snake_case_names stay intact.
+  s = s.replace(/(^|[\s(])__([^_]+)__(?=$|[\s).,;:!?])/g, '$1<strong>$2</strong>');
+  s = s.replace(/(^|[\s(])_([^_]+)_(?=$|[\s).,;:!?])/g, '$1<em>$2</em>');
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   return s;
 }
@@ -433,9 +437,40 @@ function renderMarkdown(text) {
       paragraph = [];
     }
   };
+  // A list item's text, with a leading "[ ]"/"[x]" turned into a real checkbox.
+  // Disabled because the note is the source of truth — ticking a box in the
+  // rendered view would have to write back to the file, which editing does.
+  const renderItemText = (text) => {
+    const task = text.match(/^\[( |x|X)\]\s+(.*)$/);
+    if (!task) return renderMarkdownInline(text);
+    const checked = task[1].toLowerCase() === 'x';
+    return `<label class="task-item"><input type="checkbox" disabled${checked ? ' checked' : ''}>${renderMarkdownInline(task[2])}</label>`;
+  };
+
+  // Items carry the indent they were written with, so a run of items becomes a
+  // tree: deeper indents open a nested list inside the previous item.
+  const renderListItems = (items, from, indent) => {
+    let out = '';
+    let i = from;
+    while (i < items.length && items[i].indent >= indent) {
+      const current = items[i];
+      i++;
+      let nested = '';
+      if (i < items.length && items[i].indent > current.indent) {
+        const childTag = items[i].tag; // the nested run's own bullet/number style
+        const inner = renderListItems(items, i, items[i].indent);
+        nested = `<${childTag}>${inner.html}</${childTag}>`;
+        i = inner.next;
+      }
+      out += `<li>${renderItemText(current.text)}${nested}</li>`;
+    }
+    return { html: out, next: i };
+  };
+
   const flushList = () => {
     if (list) {
-      html.push(`<${list.tag}>` + list.items.map((it) => `<li>${renderMarkdownInline(it)}</li>`).join('') + `</${list.tag}>`);
+      const { html: inner } = renderListItems(list.items, 0, list.items[0].indent);
+      html.push(`<${list.tag}>${inner}</${list.tag}>`);
       list = null;
     }
   };
@@ -453,7 +488,47 @@ function renderMarkdown(text) {
   };
   const flushAll = () => { flushParagraph(); flushList(); flushQuote(); };
 
-  lines.forEach((line) => {
+  // Splits "| a | b |" into cells, tolerating the outer pipes being absent.
+  const tableCells = (line) => line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
+  // The row under the header decides it's a table, and carries the alignments.
+  const alignmentsOf = (line) => {
+    const cells = tableCells(line);
+    if (!cells.length || !cells.every((c) => /^:?-{1,}:?$/.test(c))) return null;
+    return cells.map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : ''));
+  };
+  const cellHtml = (tag, cells, aligns) => cells
+    .map((c, i) => `<${tag}${aligns[i] ? ` style="text-align:${aligns[i]}"` : ''}>${renderMarkdownInline(c)}</${tag}>`)
+    .join('');
+
+  for (let ln = 0; ln < lines.length; ln++) {
+    const line = lines[ln];
+
+    // A table is a header row plus a |---|---| row; anything else with pipes in
+    // it is just text, so both lines must be present before we commit.
+    if (!fence && line.includes('|') && ln + 1 < lines.length) {
+      const aligns = alignmentsOf(lines[ln + 1]);
+      const header = tableCells(line);
+      if (aligns && aligns.length === header.length) {
+        flushAll();
+        const rows = [];
+        let r = ln + 2;
+        while (r < lines.length && lines[r].includes('|') && lines[r].trim()) {
+          rows.push(tableCells(lines[r]));
+          r++;
+        }
+        const body = rows
+          .map((cells) => `<tr>${cellHtml('td', cells.slice(0, header.length), aligns)}</tr>`)
+          .join('');
+        html.push(`<table class="md-table"><thead><tr>${cellHtml('th', header, aligns)}</tr></thead><tbody>${body}</tbody></table>`);
+        ln = r - 1;
+        continue;
+      }
+    }
+
+    renderLine(line);
+  }
+
+  function renderLine(line) {
     if (fence) {
       if (/^```/.test(line)) flushFence();
       else fence.lines.push(line);
@@ -475,18 +550,21 @@ function renderMarkdown(text) {
       html.push('<hr>');
       return;
     }
-    const ul = line.match(/^\s*[-*+]\s+(.*)$/);
-    if (ul) {
+    const ul = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    const ol = ul ? null : line.match(/^(\s*)\d+[.)]\s+(.*)$/);
+    const item = ul || ol;
+    if (item) {
       flushParagraph(); flushQuote();
-      if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] }; }
-      list.items.push(ul[1]);
-      return;
-    }
-    const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
-    if (ol) {
-      flushParagraph(); flushQuote();
-      if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] }; }
-      list.items.push(ol[1]);
+      const tag = ul ? 'ul' : 'ol';
+      const indent = item[1].replace(/\t/g, '    ').length;
+      // Only a change of list type at the *top* level starts a new list; a
+      // nested list of the other type stays inside the one it's indented under.
+      if (!list) list = { tag, items: [] };
+      else if (list.tag !== tag && indent <= list.items[0].indent) {
+        flushList();
+        list = { tag, items: [] };
+      }
+      list.items.push({ text: item[2], indent, tag });
       return;
     }
     const q = line.match(/^>\s?(.*)$/);
@@ -501,7 +579,8 @@ function renderMarkdown(text) {
     }
     flushList(); flushQuote();
     paragraph.push(line);
-  });
+  }
+
   flushAll();
   flushFence(); // unterminated fence at end of a prose chunk still renders as code
   return html.join('\n');

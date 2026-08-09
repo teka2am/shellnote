@@ -88,6 +88,8 @@ Get-Date
 
 Reload the note in the browser to pick up external edits.
 
+**Markdown supported:** headings, bold/italic/strikethrough (`**` or `__`), inline code, links and images, bullet and numbered lists including nested ones, task lists (`- [ ]` / `- [x]`, rendered as read-only checkboxes — tick them by editing the text), blockquotes, horizontal rules, tables with `:---:` alignment, and code fences (shell tags become runnable blocks, other tags display as code). Not supported: footnotes, reference links, bare-URL autolinking, and raw HTML, which is escaped rather than rendered.
+
 ### Organising the sidebar
 
 Drag notes to arrange them; the sort button restores A–Z (greyed out when the list already is). Hover a note and click its star to add it to **Quick access**, a collapsible section above the list that stays hidden until something is starred. Both the arrangement and the Quick access set are remembered per notes folder.

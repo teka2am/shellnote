@@ -469,6 +469,33 @@ body {
 .prose-view img { max-width: 100%; }
 .prose-view code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
 .prose-view strong { font-weight: 600; }
+.prose-view .md-table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.95em;
+  display: block; /* so a wide table scrolls itself instead of the page */
+  overflow-x: auto;
+  max-width: 100%;
+}
+.prose-view .md-table th,
+.prose-view .md-table td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+}
+.prose-view .md-table th { background: var(--panel); font-weight: 600; }
+
+/* Checkboxes are read-only: the note file is the source of truth, and editing
+   the text is what changes it. */
+.prose-view .task-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  cursor: default;
+}
+.prose-view .task-item input { margin: 0; accent-color: var(--accent); }
+.prose-view li:has(.task-item) { list-style: none; margin-left: -1.2em; }
+
 pre.md-code {
   background: var(--code-bg);
   border: 1px solid var(--border);
