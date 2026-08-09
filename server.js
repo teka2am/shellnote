@@ -42,6 +42,24 @@ let NOTES_DIR = isUsableDir(savedConfig.notesFolder) ? savedConfig.notesFolder :
 const DEFAULT_RUN_ROOT = process.cwd();
 let RUN_ROOT = isUsableDir(savedConfig.runRoot) ? savedConfig.runRoot : DEFAULT_RUN_ROOT;
 
+// Reorders the (A–Z) note list to the arrangement saved for this folder.
+// Files created since that arrangement was saved aren't in it — they keep
+// their A–Z position relative to each other and land at the end, where they're
+// easy to spot, rather than being dropped from the list.
+function applyNoteOrder(notes) {
+  const saved = (configStore.load().noteOrders || {})[NOTES_DIR];
+  if (!Array.isArray(saved) || !saved.length) return notes;
+  const remaining = new Map(notes.map((n) => [n.file, n]));
+  const ordered = [];
+  for (const file of saved) {
+    if (remaining.has(file)) {
+      ordered.push(remaining.get(file));
+      remaining.delete(file);
+    }
+  }
+  return [...ordered, ...remaining.values()];
+}
+
 const MIME = {
   '.html': 'text/html',
   '.js': 'application/javascript',
@@ -179,7 +197,24 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (p === '/api/notes' && req.method === 'GET') {
-      return sendJson(res, 200, listNotes(NOTES_DIR));
+      return sendJson(res, 200, applyNoteOrder(listNotes(NOTES_DIR)));
+    }
+
+    // A hand-arranged sidebar order, stored per notes folder so each folder
+    // keeps its own arrangement across sessions and folder switches.
+    if (p === '/api/notes-order' && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      const orders = { ...(configStore.load().noteOrders || {}) };
+      orders[NOTES_DIR] = Array.isArray(body.order) ? body.order : [];
+      configStore.update({ noteOrders: orders });
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (p === '/api/notes-order/reset' && req.method === 'POST') {
+      const orders = { ...(configStore.load().noteOrders || {}) };
+      delete orders[NOTES_DIR];
+      configStore.update({ noteOrders: orders });
+      return sendJson(res, 200, { ok: true });
     }
 
     if (p.startsWith('/api/notes/') && req.method === 'GET') {

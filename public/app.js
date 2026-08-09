@@ -564,16 +564,44 @@ function reconcileRunningExecs(items, execs, file) {
 }
 
 // ---- note list ----
-async function loadNoteList(selectFile) {
-  const notes = await fetch('/api/notes').then((r) => r.json());
-  const files = notes.map((n) => n.file);
+let noteList = []; // [{ file, path }] in sidebar order, custom or A–Z
+
+// The sort button is only actionable when the sidebar is out of A–Z order, so
+// it doubles as an indicator that a hand-arranged order is in effect.
+function refreshSortButtonState() {
+  const alpha = [...noteList].sort((a, b) => a.file.localeCompare(b.file));
+  const isAlpha = noteList.every((n, i) => n.file === alpha[i].file);
+  document.getElementById('sort-notes-btn').disabled = isAlpha;
+}
+
+function saveNoteOrder() {
+  return fetch('/api/notes-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order: noteList.map((n) => n.file) }),
+  });
+}
+
+function renderNoteList() {
   noteListItemsEl.innerHTML = '';
-  notes.forEach(({ file, path }) => {
+  noteList.forEach(({ file, path }) => {
     const item = document.createElement('div');
     item.className = 'note-item';
     item.dataset.file = file;
     item.title = path;
+    item.draggable = true;
     item.addEventListener('click', () => selectNote(file));
+    item.addEventListener('dragstart', (e) => {
+      dragSourceNote = file;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', file);
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      clearNoteDropMarkers();
+      dragSourceNote = null;
+    });
 
     const dot = document.createElement('span');
     dot.className = 'status-dot note-status-dot';
@@ -586,7 +614,79 @@ async function loadNoteList(selectFile) {
 
     noteListItemsEl.appendChild(item);
   });
+  refreshSortButtonState();
   updateStatusIndicators();
+}
+
+// ---- sidebar drag & drop ----
+let dragSourceNote = null;
+
+function clearNoteDropMarkers() {
+  noteListItemsEl.querySelectorAll('.drop-before, .drop-after')
+    .forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+}
+
+// Which slot in the list a pointer position falls at. Bound to the container
+// (not each row) so the gaps between rows and the empty space below the last
+// one are valid drop targets too, rather than silently rejecting the drop.
+function noteBoundaryAt(clientY) {
+  const rows = [...noteListItemsEl.children];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i].getBoundingClientRect();
+    if (clientY < r.top + r.height / 2) return i;
+  }
+  return rows.length;
+}
+
+noteListItemsEl.addEventListener('dragover', (e) => {
+  if (!dragSourceNote) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  clearNoteDropMarkers();
+  const rows = [...noteListItemsEl.children];
+  const boundary = noteBoundaryAt(e.clientY);
+  if (boundary < rows.length) rows[boundary].classList.add('drop-before');
+  else if (rows.length) rows[rows.length - 1].classList.add('drop-after');
+});
+
+noteListItemsEl.addEventListener('dragleave', (e) => {
+  if (!noteListItemsEl.contains(e.relatedTarget)) clearNoteDropMarkers();
+});
+
+noteListItemsEl.addEventListener('drop', async (e) => {
+  if (!dragSourceNote) return;
+  e.preventDefault();
+  clearNoteDropMarkers();
+  const from = noteList.findIndex((n) => n.file === dragSourceNote);
+  const boundary = noteBoundaryAt(e.clientY);
+  dragSourceNote = null;
+  if (from === -1 || boundary === from || boundary === from + 1) return; // no-op
+  const [moved] = noteList.splice(from, 1);
+  noteList.splice(boundary > from ? boundary - 1 : boundary, 0, moved);
+  renderNoteList();
+  markActiveInList(currentFile);
+  try {
+    await saveNoteOrder().then(assertOk);
+  } catch (err) {
+    showToast(`Could not save note order: ${err.message}`, 'error');
+  }
+});
+
+document.getElementById('sort-notes-btn').addEventListener('click', async () => {
+  try {
+    await fetch('/api/notes-order/reset', { method: 'POST' }).then(assertOk);
+    await loadNoteList(currentFile);
+    showToast('Notes sorted A–Z');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+async function loadNoteList(selectFile) {
+  const notes = await fetch('/api/notes').then((r) => r.json());
+  const files = notes.map((n) => n.file);
+  noteList = notes;
+  renderNoteList();
   markActiveInList(selectFile || (files.includes(currentFile) ? currentFile : files[0]));
   if (!files.length) {
     currentFile = null;
@@ -1362,6 +1462,13 @@ currentFilenameEl.addEventListener('click', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newName }),
       }).then(assertOk);
+      // A saved order refers to files by name, so a rename would otherwise
+      // read as "old file gone, new file added" and send it to the end.
+      const slot = noteList.findIndex((n) => n.file === original);
+      if (slot !== -1 && !document.getElementById('sort-notes-btn').disabled) {
+        noteList[slot] = { ...noteList[slot], file: newName };
+        await saveNoteOrder();
+      }
       await loadNoteList(newName);
       showToast(`Renamed to "${newName}"`);
     } catch (err) {

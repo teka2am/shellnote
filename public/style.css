@@ -274,6 +274,14 @@ body {
 .note-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-status-dot { flex: none; }
 
+/* Sidebar reordering: the row lands on the edge the bar is drawn on. */
+#note-list .note-item.dragging { opacity: 0.4; }
+#note-list .note-item.drop-before { box-shadow: 0 -2px 0 0 var(--accent); }
+#note-list .note-item.drop-after { box-shadow: 0 2px 0 0 var(--accent); }
+
+.icon-btn:disabled { opacity: 0.3; cursor: default; }
+.icon-btn:disabled:hover { background: none; color: var(--muted); transform: none; filter: none; }
+
 #note-content {
   flex: 1;
   padding: 20px;
