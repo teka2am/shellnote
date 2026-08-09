@@ -9,6 +9,7 @@ const { resolveShell, isWin } = require('./src/shellResolver');
 const executor = require('./src/executor');
 const configStore = require('./src/config');
 const { browseForFolder } = require('./src/folderBrowser');
+const logViewSettings = require('./src/logViewSettings');
 const pkg = require('./package.json');
 
 const PORT = process.env.PORT || 4488;
@@ -192,6 +193,54 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // Highlight/bookmark settings for the pop-out log viewer. A run carries the
+    // notes folder it belonged to, so a log opened long after a folder switch
+    // still resolves against the right note-level settings rather than whatever
+    // folder happens to be open now.
+    function viewScope(url) {
+      const execId = url.searchParams.get('execId') || undefined;
+      const record = execId ? executor.get(execId) : null;
+      return {
+        execId,
+        noteFile: url.searchParams.get('noteFile') || (record && record.noteFile) || undefined,
+        notesFolder: (record && record.notesFolder) || NOTES_DIR,
+      };
+    }
+
+    if (p === '/api/log-view-settings' && req.method === 'GET') {
+      return sendJson(res, 200, logViewSettings.describe(viewScope(url)));
+    }
+
+    if (p === '/api/log-view-settings' && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      const scope = viewScope(url);
+      logViewSettings.saveLevels({ ...scope, ...body, levels: body.levels });
+      return sendJson(res, 200, logViewSettings.describe({ ...scope, ...body }));
+    }
+
+    if (p === '/api/log-view-settings/reset' && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      const scope = { ...viewScope(url), ...body };
+      logViewSettings.resetLevel({ level: body.level, ...scope });
+      return sendJson(res, 200, logViewSettings.describe(scope));
+    }
+
+    if (p === '/api/log-view-settings/theme' && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      return sendJson(res, 200, { theme: logViewSettings.setTheme(body.theme) });
+    }
+
+    const bookmarkMatch = p.match(/^\/api\/executions\/([^/]+)\/bookmarks$/);
+    if (bookmarkMatch && req.method === 'GET') {
+      return sendJson(res, 200, logViewSettings.getBookmarks(bookmarkMatch[1]));
+    }
+
+    if (bookmarkMatch && req.method === 'PUT') {
+      const body = JSON.parse(await readBody(req));
+      logViewSettings.saveBookmarks(bookmarkMatch[1], body.bookmarks || {});
+      return sendJson(res, 200, { ok: true });
+    }
+
     // Current working folder — set via the sidebar's Open button, remembered
     // and reopened automatically on the next launch as long as it still exists.
     if (p === '/api/notes-folder/browse' && req.method === 'POST') {
@@ -348,6 +397,16 @@ const server = http.createServer(async (req, res) => {
     if (killMatch && req.method === 'POST') {
       const ok = executor.kill(killMatch[1]);
       return sendJson(res, ok ? 200 : 404, { killed: ok });
+    }
+
+    const noteMatch = p.match(/^\/api\/executions\/([^/]+)\/note$/);
+    if (noteMatch && req.method === 'POST') {
+      const body = JSON.parse(await readBody(req));
+      // Single-line annotation — strip newlines and cap the length so a paste
+      // can't turn the history index into a dumping ground.
+      const note = String(body.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      const ok = executor.setNote(noteMatch[1], note);
+      return ok ? sendJson(res, 200, { ok: true, note }) : sendJson(res, 404, { error: 'not found' });
     }
 
     const inputMatch = p.match(/^\/api\/executions\/([^/]+)\/input$/);

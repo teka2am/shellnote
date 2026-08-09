@@ -42,16 +42,13 @@ let defaultShell = 'bash'; // shell a new code block starts as, per the server's
 async function loadMeta() {
   const meta = await fetch('/api/meta').then((r) => r.json());
   document.getElementById('app-version').textContent = `v${meta.version}`;
-  // AGPL §13 asks a network-interacting program to offer its users the source;
-  // the FSF's suggested way is a "Source" link in the interface itself.
-  const headerMeta = document.getElementById('header-meta');
-  headerMeta.textContent = `${meta.license} · ${meta.author} · `;
-  const sourceLink = document.createElement('a');
-  sourceLink.href = 'https://github.com/teka2am/shellnote';
-  sourceLink.target = '_blank';
-  sourceLink.rel = 'noopener';
-  sourceLink.textContent = 'Source';
-  headerMeta.appendChild(sourceLink);
+  // Licence, author and the source link live in Settings → About. AGPL §13 asks
+  // a network-interacting program to offer its users the corresponding source;
+  // a link the user can always reach from the interface satisfies that without
+  // parking it in the header on every screen.
+  document.getElementById('about-version').textContent = `v${meta.version}`;
+  document.getElementById('about-license').textContent = meta.license;
+  document.getElementById('about-author').textContent = meta.author;
   serverStartTime = meta.serverStartTime || 0;
   defaultNotesFolder = meta.defaultNotesFolder;
   homeDir = meta.homeDir || '';
@@ -119,6 +116,18 @@ const settingsModal = document.getElementById('settings-modal');
 
 function openSettings() {
   settingsModal.classList.remove('hidden');
+  loadHighlightSettings();
+}
+
+// The modal's tabs. General is the folder settings that were always here;
+// Log highlights edits what the pop-out log viewer colours.
+for (const tab of document.querySelectorAll('.modal-tab')) {
+  tab.addEventListener('click', () => {
+    for (const t of document.querySelectorAll('.modal-tab')) t.classList.toggle('active', t === tab);
+    for (const panel of document.querySelectorAll('[data-settings-panel]')) {
+      panel.classList.toggle('hidden', panel.dataset.settingsPanel !== tab.dataset.settingsTab);
+    }
+  });
 }
 
 function closeSettings() {
@@ -130,6 +139,19 @@ document.getElementById('settings-close-btn').addEventListener('click', closeSet
 settingsModal.addEventListener('click', (e) => {
   if (e.target === settingsModal) closeSettings();
 });
+// ---- log highlight settings ----
+// Global only. Note-level and single-run overrides are set from the pop-out
+// itself, where there's a note and a run to attach them to — so this dialog
+// shows one list of highlights with no level picker.
+const highlightEditor = window.HighlightEditor.create({
+  root: document.getElementById('hl-root'),
+  scopes: [{ id: 'global', label: 'Global' }],
+  onSaved: () => showToast('Highlights saved'),
+});
+
+function loadHighlightSettings() {
+  return highlightEditor.load();
+}
 
 // ---- help modal ----
 const helpModal = document.getElementById('help-modal');
@@ -1553,7 +1575,9 @@ function renderBlock(block) {
       const res = await fetch(`/api/executions/${execId}/kill`, { method: 'POST' });
       showToast(res.ok ? 'Process killed' : 'Failed to kill process', res.ok ? 'success' : 'error');
     };
-    popoutBtn.onclick = () => window.open(`/output.html?execId=${execId}`, '_blank', 'width=720,height=520');
+    // Roomier than the in-note panel on purpose: the pop-out carries the search,
+    // level filter and status bars that the block's simple output view doesn't.
+    popoutBtn.onclick = () => window.open(`/output.html?execId=${execId}`, '_blank', 'width=1000,height=680');
 
     const es = new EventSource(`/api/executions/${execId}/stream`);
     es.onmessage = (e) => {
@@ -1800,7 +1824,12 @@ const columnSorters = {
   started: (ex) => ex.startedAt,
   duration: (ex) => (ex.finishedAt || Date.now()) - ex.startedAt,
   logsize: (ex) => ex.outputChars || 0,
+  comment: (ex) => (ex.note || '').toLowerCase(),
 };
+
+// While a comment is being edited, the 2s poll must not re-render the table —
+// that would throw away the open input (and whatever was typed into it).
+let editingNoteExecId = null;
 
 document.querySelectorAll('#proc-table thead th[data-sort]').forEach((th) => {
   th.addEventListener('click', () => {
@@ -1825,8 +1854,80 @@ document.getElementById('kill-all-btn').addEventListener('click', async () => {
 });
 
 async function refreshProcesses() {
+  // The poll rebuilds every row, so a comment cell the pointer is on would be
+  // replaced between the two halves of a double-click (and the edit button
+  // yanked out from under a click). Hold the poll while a cell is hovered —
+  // the live :hover query can't go stale the way a flag could.
+  if (editingNoteExecId || procTableBody.querySelector('.comment-cell:hover')) return;
   latestExecs = await fetch('/api/executions').then((r) => r.json());
   renderProcTable();
+}
+
+// The Comment cell: a truncated label (full text on hover) that turns into a
+// single-line input on double-click, or on the edit button that appears on hover.
+function buildCommentCell(ex) {
+  const td = document.createElement('td');
+  td.className = 'comment-cell';
+
+  const label = document.createElement('span');
+  label.className = ex.note ? 'comment-text' : 'comment-text empty';
+  label.textContent = ex.note || 'Add a note…';
+  if (ex.note) label.title = ex.note;
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'comment-edit-btn';
+  editBtn.textContent = '✎';
+  editBtn.title = 'Edit note';
+
+  const startEdit = () => {
+    editingNoteExecId = ex.execId;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'comment-input';
+    input.value = ex.note || '';
+    input.maxLength = 500;
+    input.placeholder = 'Note…';
+
+    let settled = false;
+    const finishEdit = (commit) => {
+      if (settled) return;
+      settled = true;
+      editingNoteExecId = null;
+      const value = input.value.replace(/\s+/g, ' ').trim();
+      const changed = commit && value !== (ex.note || '');
+      if (changed) ex.note = value; // optimistic — the poll is paused, so this is what re-renders
+      renderProcTable();
+      if (!changed) return;
+      fetch(`/api/executions/${ex.execId}/note`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: value }),
+      }).then((res) => {
+        if (!res.ok) showToast('Failed to save note', 'error');
+      });
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finishEdit(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        finishEdit(false);
+      }
+    });
+    input.addEventListener('blur', () => finishEdit(true));
+
+    td.replaceChildren(input);
+    input.focus();
+    input.select();
+  };
+
+  td.addEventListener('dblclick', startEdit);
+  editBtn.addEventListener('click', startEdit);
+  td.append(label, editBtn);
+  return td;
 }
 
 function renderProcTable() {
@@ -1891,11 +1992,12 @@ function renderProcTable() {
 
     const viewCell = tr.children[tr.children.length - 2];
     const actionCell = tr.lastElementChild;
+    tr.insertBefore(buildCommentCell(ex), viewCell);
 
     const viewBtn = document.createElement('button');
     viewBtn.className = 'popout-btn';
     viewBtn.textContent = 'View';
-    viewBtn.addEventListener('click', () => window.open(`/output.html?execId=${ex.execId}`, '_blank', 'width=720,height=520'));
+    viewBtn.addEventListener('click', () => window.open(`/output.html?execId=${ex.execId}`, '_blank', 'width=1000,height=680'));
     viewCell.appendChild(viewBtn);
 
     if (ex.status === 'running') {

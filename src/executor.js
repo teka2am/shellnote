@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const configStore = require('./config');
+const logViewSettings = require('./logViewSettings');
 
 // Optional enhancement: if node-pty is installed (npm install node-pty in the
 // app folder, then restart), blocks run inside a real pseudo-terminal, so
@@ -80,6 +81,10 @@ function deleteOutputFile(execId) {
   } catch {
     // Already gone, or never written.
   }
+  // The run's highlight overrides and bookmarks are meaningless once its output
+  // is gone, so they're dropped on the same path rather than accumulating in
+  // the logs folder forever.
+  logViewSettings.deleteSidecar(execId);
 }
 
 function loadPersistedHistory() {
@@ -121,6 +126,7 @@ function createExecution({ shellPath, args, cwd, noteFile, noteTitle, blockIndex
     notesFolder, // absolute notes-folder path active when this ran, so history
                  // links stay correct even after switching notes folders and back
     shell: shellTag,
+    note: '', // free-text annotation the user can add from the Processes tab
     status: 'running',
     pid: null,
     startedAt: Date.now(),
@@ -255,6 +261,16 @@ function trackHistory(execId) {
   }
 }
 
+// A run's user-written note. A running record keeps it in memory only — it
+// reaches disk when the run finishes and the history index is rewritten.
+function setNote(execId, note) {
+  const record = executions.get(execId);
+  if (!record) return false;
+  record.note = note;
+  if (record.status !== 'running') persistHistoryIndex();
+  return true;
+}
+
 function kill(execId) {
   const record = executions.get(execId);
   if (!record || record.status !== 'running') return false;
@@ -324,8 +340,8 @@ function getRaw(execId) {
 }
 
 function toSummary(record, includeOutput) {
-  const { execId, noteFile, noteTitle, blockIndex, notesFolder, shell, status, pid, startedAt, finishedAt, exitCode, outputChars } = record;
-  const summary = { execId, noteFile, noteTitle, blockIndex, notesFolder, shell, status, pid, startedAt, finishedAt, exitCode, outputChars };
+  const { execId, noteFile, noteTitle, blockIndex, notesFolder, shell, note, status, pid, startedAt, finishedAt, exitCode, outputChars } = record;
+  const summary = { execId, noteFile, noteTitle, blockIndex, notesFolder, shell, note: note || '', status, pid, startedAt, finishedAt, exitCode, outputChars };
   if (includeOutput) summary.output = record.output.join('');
   return summary;
 }
@@ -337,4 +353,4 @@ function subscribe(execId, listener) {
   return () => record.listeners.delete(listener);
 }
 
-module.exports = { createExecution, kill, killAll, list, get, getRaw, subscribe, clearHistory, remove, sendInput, closeInput, ptyAvailable: !!pty };
+module.exports = { createExecution, kill, killAll, list, get, getRaw, subscribe, clearHistory, remove, sendInput, closeInput, setNote, ptyAvailable: !!pty };

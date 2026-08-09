@@ -37,13 +37,6 @@
           </g>
         </svg>
       </button>
-      <button id="help-btn" class="icon-btn" title="Help">
-        <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.3"/>
-          <path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.2 6.2a1.8 1.8 0 1 1 2.6 1.7c-.6.3-.8.7-.8 1.3"/>
-          <circle cx="8" cy="11.4" r="0.9" fill="currentColor"/>
-        </svg>
-      </button>
       <button id="settings-btn" class="icon-btn" title="Settings">
         <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
           <g stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
@@ -56,12 +49,18 @@
           <circle cx="7" cy="12" r="1.6" fill="currentColor"/>
         </svg>
       </button>
-      <div id="header-meta"></div>
+      <button id="help-btn" class="icon-btn" title="Help">
+        <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          <path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.2 6.2a1.8 1.8 0 1 1 2.6 1.7c-.6.3-.8.7-.8 1.3"/>
+          <circle cx="8" cy="11.4" r="0.9" fill="currentColor"/>
+        </svg>
+      </button>
     </div>
   </header>
 
   <div id="settings-modal" class="modal-overlay hidden">
-    <div class="modal">
+    <div class="modal settings-modal">
       <div class="modal-header">
         <h2>Settings</h2>
         <button id="settings-close-btn" class="icon-btn" title="Close">
@@ -70,7 +69,12 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body">
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-settings-tab="general">General</button>
+        <button class="modal-tab" data-settings-tab="highlights">Log highlights</button>
+        <button class="modal-tab" data-settings-tab="about">About</button>
+      </div>
+      <div class="modal-body" data-settings-panel="general">
         <div class="settings-row">
           <div class="settings-row-header">
             <span class="settings-label">Notes folder</span>
@@ -129,6 +133,45 @@
           <button id="clear-app-data-btn" class="danger">Clear all app data</button>
         </div>
       </div>
+
+      <div class="modal-body hidden" data-settings-panel="highlights">
+        <div id="hl-root"></div>
+      </div>
+
+      <div class="modal-body hidden" data-settings-panel="about">
+        <div class="about-head">
+          <div class="about-name">shellnote</div>
+          <div class="about-version" id="about-version"></div>
+        </div>
+        <div class="about-tagline">A local notebook for running PowerShell / cmd / bash blocks from Markdown notes.</div>
+
+        <div class="settings-row">
+          <div class="settings-row-header">
+            <span class="settings-label">License</span>
+          </div>
+          <div class="settings-value"><span id="about-license"></span></div>
+          <div class="settings-hint">
+            Free software: use and modify it as you like, including at work, at no cost. If you distribute it — or a product built on it — that source must stay under the same license, and a modified version run as a network service must offer its source to that service's users. The <code>LICENSE</code> file has the full terms.
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-header">
+            <span class="settings-label">Author</span>
+          </div>
+          <div class="settings-value"><span id="about-author"></span></div>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-header">
+            <span class="settings-label">Source</span>
+          </div>
+          <div class="settings-value">
+            <a id="about-source" href="https://github.com/teka2am/shellnote" target="_blank" rel="noopener">github.com/teka2am/shellnote</a>
+          </div>
+          <div class="settings-hint">The AGPL asks a program you interact with over a network to offer its users the corresponding source. This link is that offer.</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -163,6 +206,23 @@
 
         <h3>Processes</h3>
         <p>The Processes tab lists every run across all notes — running and recent — with live status, duration, View (pop-out window, which also accepts input), Kill, and Remove. History survives server restarts.</p>
+        <p>Each row has a <b>Comment</b> you can write on to remember what a run was for. Double-click the cell (or the pencil that appears on hover) to edit it, Enter to save, Esc to cancel; long text is truncated and shown in full on hover. Comments are kept with the run's history and disappear when it's removed.</p>
+
+        <h3>Reading a log (pop-out)</h3>
+        <p>A block's own output stays a plain scrolling transcript. <b>Pop out</b> — from a block header or the Processes tab — opens the same run in a log viewer built for longer output, live or finished. Highlights and bookmarks only ever add a background or a margin marker: <b>the log's own text is never recoloured or rewritten</b>.</p>
+        <p><b>Search</b> the log as plain text or a regular expression (<code>.*</code>), with <code>Aa</code> for case, <code>&lsaquo;</code>&nbsp;<code>&rsaquo;</code> to step through hits (Enter / Shift+Enter), and <b>Only matches</b> to hide everything else. Ctrl+F jumps to the box, Esc clears it.</p>
+        <p><b>Highlights</b> colour the background of any line containing one of their keywords — edit them in Settings, or per-run from the pop-out's own <b>Settings</b> button.</p>
+        <p><b>Bookmarks</b> — hover any line and a hollow bookmark icon appears at its left edge. Click it to bookmark the line in the default colour, or hover it to expand five colours plus a comment box; clicking a filled icon removes the bookmark. A bookmarked line keeps that icon, in its colour, in the left gutter. A commented line shows its note on hover, and on the ruler mark's tooltip. Bookmarks and comments save themselves and reappear next time you open that run.</p>
+        <p><b>Structured data</b> — JSON, XML and HTML are found wherever a log printed them: inline behind a timestamp, spread over fifty lines, or wrapped. Hover one and the data itself is shaded, first character to last, with a copy chip at the end that takes the whole block. Detection is forgiving rather than strict; when it gets a block wrong, select part of the data yourself and the viewer looks outwards for a structure containing it, broken syntax and all. <b>Ctrl+C</b> still copies exactly what you selected — the chip copies the whole block. Esc drops it. The <b>Data</b> button turns detection off for logs it reads badly.</p>
+        <p><b>The right-hand ruler</b> replaces the scrollbar: every highlighted line is a coloured bar, every bookmark a fixed-size mark, and every data block a rail down its left edge, so a 20,000-line run reads at a glance. Click to jump, drag to scrub, hover to widen it — the bookmark marks keep their size so they don't shift under the pointer.</p>
+        <p><b>The panel</b> appears when you hover the top-right corner: each highlight with its count, clicking one hides those lines, plus <b>Other lines</b> for everything neither highlighted nor bookmarked and <b>All</b> / <b>None</b> to flip the whole set. Bookmark colours are listed below with their own counts and toggles.</p>
+        <p><b>Following</b> stops as soon as you scroll up or step through matches; <b>Jump to latest</b> resumes it. <b>Markup</b> controls the highlight backgrounds only — the bookmark icons and the ruler keep working with it off — and starts off until this log's highlights have been configured. <code>#</code> shows line numbers (kept out of copied text), <b>Data</b> toggles structured-data detection, <b>Wrap</b> switches between wrapping and a horizontal scroll, <b>Copy</b> / <b>Save</b> take whatever the filters leave visible, and the button at the far left of the header hides the toolbar.</p>
+
+        <h3>Log highlights</h3>
+        <p><b>Settings → Log highlights</b> defines the keyword highlights the log viewer uses. A line containing one of a highlight's keywords gets that highlight's background colour — the log's own text is never recoloured, so nothing a command actually printed is misrepresented.</p>
+        <p>Pick a highlight from the list to edit it on the right: its name, colour, keywords (added and removed one chip at a time), and whether it must match whole words (so <code>pass</code> doesn't match <code>password</code>) or an exact case. The preview shows a matching line as it will actually look in the log.</p>
+        <p>A dot beside a highlight means it differs from the built-in default; anything without one keeps following the defaults rather than being frozen as a copy. <b>Reset to defaults</b> clears the lot. The <b>Colour theme</b> sets how strong the colours are: <b>Subtle</b> is muted, <b>High contrast</b> is stronger and more saturated.</p>
+        <p>Everything in this dialog is <b>global</b>. <b>Settings</b> in the pop-out toolbar opens the same editor with an <b>Applies to</b> choice per highlight — <b>this log only</b>, <b>this note</b>, or <b>everywhere</b>. A line only ever gets one highlight, and the narrower scope wins, so a rule added for a single run beats a broad global one like <code>error</code>.</p>
 
         <h3>Shells &amp; platforms</h3>
         <p><code>cmd</code> and <code>gitbash</code> blocks run on Windows only (git-bash must be installed). <code>bash</code> uses <code>/bin/bash</code> on macOS/Linux and git-bash on Windows. <code>powershell</code> uses <code>powershell.exe</code> on Windows and <code>pwsh</code> elsewhere. Blocks are otherwise stateless — environment variables don't carry between blocks.</p>
@@ -171,7 +231,7 @@
         <p>Notes live in your notes folder (sidebar). Settings and run logs live in the app data folder — both are shown and changeable in Settings.</p>
 
         <h3>License</h3>
-        <p>shellnote is free software under the <b>GNU AGPL v3.0 or later</b>: use and modify it as you like, including at work, at no cost. If you distribute it — or a product built on it — that source must stay AGPL, and a modified version run as a network service must offer its source to that service's users. The <b>Source</b> link in the header goes to the full code; the <code>LICENSE</code> file has the terms.</p>
+        <p>shellnote is free software under the <b>GNU AGPL v3.0 or later</b>: use and modify it as you like, including at work, at no cost. If you distribute it — or a product built on it — that source must stay AGPL, and a modified version run as a network service must offer its source to that service's users. <b>Settings &rarr; About</b> carries the licence, the author and a <b>Source</b> link to the full code; the <code>LICENSE</code> file has the terms.</p>
       </div>
     </div>
   </div>
@@ -247,7 +307,7 @@
     <table id="proc-table">
       <thead>
         <tr>
-          <th data-sort="note">Note</th><th data-sort="block">Block</th><th data-sort="shell">Shell</th><th data-sort="status">Status</th><th data-sort="started">Started</th><th data-sort="duration">Duration</th><th data-sort="logsize">Log Size</th><th></th><th></th>
+          <th data-sort="note">Note</th><th data-sort="block">Block</th><th data-sort="shell">Shell</th><th data-sort="status">Status</th><th data-sort="started">Started</th><th data-sort="duration">Duration</th><th data-sort="logsize">Log Size</th><th data-sort="comment">Comment</th><th></th><th></th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -256,6 +316,7 @@
 
   <div id="toast-container"></div>
 
+  <script src="/highlightEditor.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
