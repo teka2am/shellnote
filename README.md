@@ -115,7 +115,7 @@ Highlights and bookmarks only ever add a background or a margin marker. **The lo
 
 Pick a highlight from the list to edit it on the right: name, colour, its keywords (added and removed one chip at a time), and whether it must match whole words (so `pass` doesn't match `password`) or an exact case. A preview shows a matching line as it will actually appear. A dot next to a highlight means it differs from the built-in default — everything else keeps following the defaults rather than being frozen as a copy, and **Reset to defaults** clears the lot.
 
-The **Colour theme** sets how strong the colours are: **Friendly** is soft pastel, **High contrast** is stronger and more saturated.
+The **Colour theme** sets how strong the colours are: **Subtle** is muted, **High contrast** is stronger and more saturated.
 
 Everything in that dialog is **global**. **Settings** in the pop-out toolbar opens the same editor with an extra **Applies to** choice per highlight:
 

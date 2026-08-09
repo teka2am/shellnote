@@ -37,13 +37,6 @@
           </g>
         </svg>
       </button>
-      <button id="help-btn" class="icon-btn" title="Help">
-        <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.3"/>
-          <path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.2 6.2a1.8 1.8 0 1 1 2.6 1.7c-.6.3-.8.7-.8 1.3"/>
-          <circle cx="8" cy="11.4" r="0.9" fill="currentColor"/>
-        </svg>
-      </button>
       <button id="settings-btn" class="icon-btn" title="Settings">
         <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
           <g stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
@@ -54,6 +47,13 @@
           <circle cx="6" cy="4" r="1.6" fill="currentColor"/>
           <circle cx="11" cy="8" r="1.6" fill="currentColor"/>
           <circle cx="7" cy="12" r="1.6" fill="currentColor"/>
+        </svg>
+      </button>
+      <button id="help-btn" class="icon-btn" title="Help">
+        <svg viewBox="0 0 16 16" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          <path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M6.2 6.2a1.8 1.8 0 1 1 2.6 1.7c-.6.3-.8.7-.8 1.3"/>
+          <circle cx="8" cy="11.4" r="0.9" fill="currentColor"/>
         </svg>
       </button>
     </div>
@@ -220,7 +220,7 @@
         <h3>Log highlights</h3>
         <p><b>Settings → Log highlights</b> defines the keyword highlights the log viewer uses. A line containing one of a highlight's keywords gets that highlight's background colour — the log's own text is never recoloured, so nothing a command actually printed is misrepresented.</p>
         <p>Pick a highlight from the list to edit it on the right: its name, colour, keywords (added and removed one chip at a time), and whether it must match whole words (so <code>pass</code> doesn't match <code>password</code>) or an exact case. The preview shows a matching line as it will actually look in the log.</p>
-        <p>A dot beside a highlight means it differs from the built-in default; anything without one keeps following the defaults rather than being frozen as a copy. <b>Reset to defaults</b> clears the lot. The <b>Colour theme</b> sets how strong the colours are: <b>Friendly</b> is soft pastel, <b>High contrast</b> is stronger and more saturated.</p>
+        <p>A dot beside a highlight means it differs from the built-in default; anything without one keeps following the defaults rather than being frozen as a copy. <b>Reset to defaults</b> clears the lot. The <b>Colour theme</b> sets how strong the colours are: <b>Subtle</b> is muted, <b>High contrast</b> is stronger and more saturated.</p>
         <p>Everything in this dialog is <b>global</b>. <b>Settings</b> in the pop-out toolbar opens the same editor with an <b>Applies to</b> choice per highlight — <b>this log only</b>, <b>this note</b>, or <b>everywhere</b>. A line only ever gets one highlight, and the narrower scope wins, so a rule added for a single run beats a broad global one like <code>error</code>.</p>
 
         <h3>Shells &amp; platforms</h3>

@@ -34,11 +34,11 @@ const HUES = {
 // sit above them at full strength, because they're navigation markers the user
 // placed by hand and needs to pick out at a glance.
 const THEMES = {
-  friendly: {
-    label: 'Friendly',
-    hint: 'Soft pastel washes — easy to sit in front of for a long run.',
-    highlight: { s: 68, l: 58, a: 0.22 },
-    bookmark: { s: 62, l: 56, a: 0.95 },
+  subtle: {
+    label: 'Subtle',
+    hint: 'Muted washes — easy to sit in front of for a long run.',
+    highlight: { s: 80, l: 58, a: 0.22 },
+    bookmark: { s: 74, l: 56, a: 0.95 },
   },
   contrast: {
     label: 'High contrast',
@@ -48,7 +48,9 @@ const THEMES = {
   },
 };
 
-const DEFAULT_THEME = 'friendly';
+// Unknown ids fall back here, so a config still holding the old 'friendly' id
+// lands on the same theme under its new name.
+const DEFAULT_THEME = 'subtle';
 
 // The five bookmark colours, in the order the picker offers them.
 const BOOKMARK_COLORS = ['red', 'orange', 'green', 'blue', 'purple'];
