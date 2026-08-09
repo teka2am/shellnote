@@ -262,25 +262,34 @@ function attachDragHandlers(wrap, item, handle) {
   });
   handle.addEventListener('dragend', () => {
     wrap.classList.remove('dragging');
-    noteItemsEl.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+    noteItemsEl.querySelectorAll('.drag-over-before, .drag-over-after').forEach((el) => el.classList.remove('drag-over-before', 'drag-over-after'));
     dragSourceItem = null;
   });
 
+  // The drop indicator is a horizontal bar above or below the hovered item —
+  // upper half of the item means "insert before", lower half "insert after" —
+  // so the user can see the exact landing spot instead of guessing from a
+  // highlight around the whole item.
   wrap.addEventListener('dragover', (e) => {
     if (!dragSourceItem || dragSourceItem === item) return;
     e.preventDefault();
-    wrap.classList.add('drag-over');
+    const rect = wrap.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    wrap.classList.toggle('drag-over-before', before);
+    wrap.classList.toggle('drag-over-after', !before);
   });
-  wrap.addEventListener('dragleave', () => wrap.classList.remove('drag-over'));
+  wrap.addEventListener('dragleave', () => wrap.classList.remove('drag-over-before', 'drag-over-after'));
   wrap.addEventListener('drop', (e) => {
     e.preventDefault();
-    wrap.classList.remove('drag-over');
+    const before = wrap.classList.contains('drag-over-before');
+    wrap.classList.remove('drag-over-before', 'drag-over-after');
     if (!dragSourceItem || dragSourceItem === item) return;
     const fromIndex = currentItems.indexOf(dragSourceItem);
-    const toIndex = currentItems.indexOf(item);
-    if (fromIndex === -1 || toIndex === -1) return;
+    if (fromIndex === -1 || currentItems.indexOf(item) === -1) return;
     currentItems.splice(fromIndex, 1);
-    currentItems.splice(toIndex, 0, dragSourceItem);
+    // Recompute after removal — the target's index shifts when dragging down.
+    const toIndex = currentItems.indexOf(item);
+    currentItems.splice(before ? toIndex : toIndex + 1, 0, dragSourceItem);
     dragSourceItem = null;
     renderNoteItems();
     markDirty();
