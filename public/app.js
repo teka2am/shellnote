@@ -1,5 +1,6 @@
 const noteListItemsEl = document.getElementById('note-list-items');
 const noteItemsEl = document.getElementById('note-items');
+const noteContentEl = document.getElementById('note-content');
 const noteToolbarEl = document.getElementById('note-toolbar');
 const currentFilenameEl = document.getElementById('current-filename');
 const procTableBody = document.querySelector('#proc-table tbody');
@@ -269,38 +270,55 @@ function attachDragHandlers(wrap, item, handle) {
     clearDropTargets();
     dragSourceItem = null;
   });
-
-  // The drop indicator is the insert-divider line that already sits at every
-  // item boundary — upper half of the hovered item lights the divider above
-  // it, lower half the one below. One consistent marker for prose and code
-  // blocks alike, at the exact landing spot. (Dividers flank every item in
-  // the DOM, so previous/next sibling is always the right divider.)
-  wrap.addEventListener('dragover', (e) => {
-    if (!dragSourceItem || dragSourceItem === item) return;
-    e.preventDefault();
-    const rect = wrap.getBoundingClientRect();
-    const before = e.clientY < rect.top + rect.height / 2;
-    clearDropTargets();
-    const divider = before ? wrap.previousElementSibling : wrap.nextElementSibling;
-    if (divider) divider.classList.add('drop-target');
-  });
-  wrap.addEventListener('drop', (e) => {
-    e.preventDefault();
-    clearDropTargets();
-    if (!dragSourceItem || dragSourceItem === item) return;
-    const rect = wrap.getBoundingClientRect();
-    const before = e.clientY < rect.top + rect.height / 2;
-    const fromIndex = currentItems.indexOf(dragSourceItem);
-    if (fromIndex === -1 || currentItems.indexOf(item) === -1) return;
-    currentItems.splice(fromIndex, 1);
-    // Recompute after removal — the target's index shifts when dragging down.
-    const toIndex = currentItems.indexOf(item);
-    currentItems.splice(before ? toIndex : toIndex + 1, 0, dragSourceItem);
-    dragSourceItem = null;
-    renderNoteItems();
-    markDirty();
-  });
 }
+
+// Which boundary (index into currentItems) a pointer position corresponds to:
+// before the first item whose midpoint is below the cursor, else the very end.
+// Every Y maps to some boundary, so there is no position inside the note area
+// that fails to resolve to a drop target.
+function boundaryIndexAt(clientY) {
+  const els = [...noteItemsEl.querySelectorAll(':scope > .prose, :scope > .block')];
+  for (let i = 0; i < els.length; i++) {
+    const r = els[i].getBoundingClientRect();
+    if (clientY < r.top + r.height / 2) return i;
+  }
+  return els.length;
+}
+
+// Drag handling lives on the container, not on individual items. A drop is only
+// accepted where the *last* dragover called preventDefault(), so per-item
+// handlers left dead zones — the margins between items, the gutter, the area
+// below the last item, and the dragged item itself — where releasing silently
+// did nothing while the stale highlight still showed a valid-looking target.
+noteContentEl.addEventListener('dragover', (e) => {
+  if (!dragSourceItem) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  clearDropTargets();
+  const dividers = noteItemsEl.querySelectorAll(':scope > .insert-divider');
+  const divider = dividers[boundaryIndexAt(e.clientY)];
+  if (divider) divider.classList.add('drop-target');
+});
+
+noteContentEl.addEventListener('dragleave', (e) => {
+  if (!noteContentEl.contains(e.relatedTarget)) clearDropTargets();
+});
+
+noteContentEl.addEventListener('drop', (e) => {
+  if (!dragSourceItem) return;
+  e.preventDefault();
+  clearDropTargets();
+  const fromIndex = currentItems.indexOf(dragSourceItem);
+  const boundary = boundaryIndexAt(e.clientY);
+  const moved = dragSourceItem;
+  dragSourceItem = null;
+  // Both boundaries touching the dragged item put it back where it started.
+  if (fromIndex === -1 || boundary === fromIndex || boundary === fromIndex + 1) return;
+  currentItems.splice(fromIndex, 1);
+  currentItems.splice(boundary > fromIndex ? boundary - 1 : boundary, 0, moved);
+  renderNoteItems();
+  markDirty();
+});
 
 // ---- tabs ----
 function activateTab(tabName) {
@@ -567,26 +585,6 @@ function makeInsertDivider(index) {
     markDirty();
   });
 
-  // The divider strip is itself a drop target: it marks a boundary, so a drop
-  // here inserts the dragged item at exactly this index.
-  div.addEventListener('dragover', (e) => {
-    if (!dragSourceItem) return;
-    e.preventDefault();
-    clearDropTargets();
-    div.classList.add('drop-target');
-  });
-  div.addEventListener('drop', (e) => {
-    e.preventDefault();
-    clearDropTargets();
-    if (!dragSourceItem) return;
-    const fromIndex = currentItems.indexOf(dragSourceItem);
-    if (fromIndex === -1) return;
-    currentItems.splice(fromIndex, 1);
-    currentItems.splice(fromIndex < index ? index - 1 : index, 0, dragSourceItem);
-    dragSourceItem = null;
-    renderNoteItems();
-    markDirty();
-  });
   return div;
 }
 
