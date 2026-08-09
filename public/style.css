@@ -249,6 +249,10 @@ body {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
+/* Ellipsize from the left so the tail of a long path — the part that
+   identifies it — stays readable. The path text itself must sit in a <bdi> so
+   it keeps its own left-to-right order; without that isolation a leading "/"
+   is a direction-neutral character and gets reordered to the far end. */
 #notes-folder-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -572,8 +576,8 @@ pre.code code { white-space: pre; }
 .shell-badge.bash { background: rgba(76,175,125,0.18); color: #7fcfa4; }
 .shell-badge.gitbash { background: rgba(229,100,90,0.18); color: #ef948c; }
 
-/* Where the block will run. RTL direction keeps the ellipsis at the start so
-   the tail of a long path (the part that matters) stays visible. */
+/* Where the block will run — ellipsized from the left like the sidebar's
+   folder label, with the path in a <bdi> for the same reason. */
 .cwd-label {
   font-size: 11px;
   color: var(--muted);
@@ -582,8 +586,7 @@ pre.code code { white-space: pre; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl; /* ellipsis on the left… */
-  unicode-bidi: plaintext; /* …but the path itself still reads left-to-right */
+  direction: rtl;
   text-align: left;
 }
 

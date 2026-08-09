@@ -56,10 +56,19 @@ async function loadMeta() {
   updateRunRootInfo(meta.runRoot, meta.isDefaultRunRoot);
 }
 
+// Paths sit inside a <bdi> so they keep their own left-to-right order in the
+// labels that ellipsize from the left — see the CSS note on #notes-folder-label.
+function setPathText(el, text) {
+  el.textContent = '';
+  const bdi = document.createElement('bdi');
+  bdi.textContent = text;
+  el.appendChild(bdi);
+}
+
 function updateCurrentFolderInfo(folderPath, isDefault) {
   currentNotesFolder = folderPath;
   const label = document.getElementById('notes-folder-label');
-  label.textContent = isDefault ? `${folderPath} (default)` : folderPath;
+  setPathText(label, isDefault ? `${folderPath} (default)` : folderPath);
   label.title = folderPath;
 
   document.getElementById('settings-notes-folder-label').textContent = folderPath;
@@ -826,7 +835,7 @@ function updateCwdLabels() {
   if (!currentItems || !runRoot) return;
   const cwds = effectiveCwds();
   noteItemsEl.querySelectorAll(':scope > .block .cwd-label').forEach((el, i) => {
-    el.textContent = cwds[i] || '';
+    setPathText(el, cwds[i] || '');
     el.title = `Runs in: ${cwds[i]}`;
   });
 }
