@@ -149,6 +149,9 @@
         <h3>Editing notes</h3>
         <p>Text renders as regular Markdown. Edit a section with the pencil in its hover gutter (or double-click it); hover between sections for a <code>+</code> insert line. The <code>&lt;&gt;</code> toggle in the header switches to a raw Markdown editor for the whole note. Files edited outside the app are picked up on reload.</p>
 
+        <h3>Organising the sidebar</h3>
+        <p>Drag notes to arrange them, or use the sort button to restore A–Z (it's greyed out when the list already is). Hover a note and click its star to add it to <b>Quick access</b>, a collapsible section pinned above the list. Both the arrangement and the Quick access set are remembered per notes folder.</p>
+
         <h3>Where blocks run</h3>
         <p>Each block's header shows the folder it will run in. The starting folder is the <b>Run folder</b> (Settings), defaulting to where the server was started. A <code>cd</code> inside a block shifts the folder of same-shell blocks below it — each shell keeps its own folder lineage, and only forms that shell understands are recognized (<code>cd /d</code>, bare <code>D:</code> for cmd; <code>Set-Location</code> for powershell; case-sensitive <code>cd</code> and <code>~</code> for bash). Targets built from environment variables can't be predicted and are ignored.</p>
 
@@ -207,11 +210,11 @@
         <span id="notes-folder-label"></span>
       </div>
       <div id="starred-section" class="hidden">
-        <button id="starred-header" title="Show or hide starred notes">
+        <button id="starred-header" title="Show or hide quick access notes">
           <svg class="starred-caret" viewBox="0 0 16 16" width="10" height="10" xmlns="http://www.w3.org/2000/svg">
             <path fill="currentColor" d="M5 3.5 10.5 8 5 12.5z"/>
           </svg>
-          <span>Starred</span>
+          <span>Quick access</span>
           <span id="starred-count"></span>
         </button>
         <div id="starred-items"></div>

@@ -642,10 +642,12 @@ function createNoteItem({ file, path, starred }, { draggable }) {
   nameSpan.textContent = file;
   item.appendChild(nameSpan);
 
+  // The star is the gesture; the section it feeds is labelled "Quick access"
+  // in the UI, which is what the tooltips name.
   const star = document.createElement('button');
   star.className = `note-star${starred ? ' starred' : ''}`;
   star.innerHTML = ICON_STAR;
-  star.title = starred ? 'Remove from starred' : 'Add to starred';
+  star.title = starred ? 'Remove from Quick access' : 'Add to Quick access';
   star.addEventListener('click', (e) => {
     e.stopPropagation(); // starring a note shouldn't also open it
     toggleStar(file, !starred);
@@ -655,8 +657,9 @@ function createNoteItem({ file, path, starred }, { draggable }) {
   return item;
 }
 
-// The starred section is a filtered view of the same list, so whatever order
-// the notes are in — A–Z or hand-arranged — both sections follow it.
+// The starred section ("Quick access" in the UI) is a filtered view of the same
+// list, so whatever order the notes are in — A–Z or hand-arranged — both
+// sections follow it.
 function renderNoteList() {
   noteListItemsEl.innerHTML = '';
   noteList.forEach((note) => noteListItemsEl.appendChild(createNoteItem(note, { draggable: true })));

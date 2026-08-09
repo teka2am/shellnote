@@ -278,9 +278,10 @@ body {
 .note-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-status-dot { flex: none; }
 
-/* Star sits at the far right of the row. Out of sight until the row is
-   hovered, so an unstarred list stays quiet; once starred it stays visible,
-   because it's showing state rather than offering an action. */
+/* Star sits at the far right of the row and adds the note to the sidebar's
+   "Quick access" section. Out of sight until the row is hovered, so an
+   unstarred list stays quiet; once starred it stays visible, because it's
+   showing state rather than offering an action. */
 .note-star {
   flex: none;
   display: flex;

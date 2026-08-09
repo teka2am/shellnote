@@ -88,6 +88,10 @@ Get-Date
 
 Reload the note in the browser to pick up external edits.
 
+### Organising the sidebar
+
+Drag notes to arrange them; the sort button restores A–Z (greyed out when the list already is). Hover a note and click its star to add it to **Quick access**, a collapsible section above the list that stays hidden until something is starred. Both the arrangement and the Quick access set are remembered per notes folder.
+
 ### Interactive input
 
 While a block is running, an input row appears under its output — type a response and press Enter to send it to the process (`read`, `Read-Host`, `set /p`, y/n prompts). **End input** closes stdin for commands that read until end-of-input. The pop-out output window has the same row.
