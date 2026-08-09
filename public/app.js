@@ -831,12 +831,50 @@ function effectiveCwds() {
   return cwds;
 }
 
+// Shortens a path in the middle until it fits its box — the start says which
+// drive or home it's under, the end says which project, and the middle is the
+// part you can afford to lose. The full path stays in the tooltip.
+// Binary searches the longest kept length that still fits, so it costs a
+// handful of layout reads rather than one per character.
+function fitPathLabel(el) {
+  const full = el.dataset.path || '';
+  el.textContent = full;
+  if (!full || !el.clientWidth || el.scrollWidth <= el.clientWidth) return;
+  let lo = 1;
+  let hi = full.length - 1;
+  let best = '…';
+  while (lo <= hi) {
+    const keep = (lo + hi) >> 1;
+    const head = Math.ceil(keep / 2);
+    const tail = keep - head;
+    const candidate = full.slice(0, head) + '…' + (tail ? full.slice(-tail) : '');
+    el.textContent = candidate;
+    if (el.scrollWidth <= el.clientWidth) {
+      best = candidate;
+      lo = keep + 1;
+    } else {
+      hi = keep - 1;
+    }
+  }
+  el.textContent = best;
+}
+
+// The room a label gets changes for many reasons — window resize, the sidebar,
+// a scrollbar appearing, the extra buttons a block grows once it has run.
+// Watching the box itself catches all of them; a resize listener would only
+// catch the first. Re-fitting doesn't alter the box (the label is flex-sized),
+// so this can't feed back into itself.
+const pathLabelObserver = new ResizeObserver((entries) => {
+  for (const entry of entries) fitPathLabel(entry.target);
+});
+
 function updateCwdLabels() {
   if (!currentItems || !runRoot) return;
   const cwds = effectiveCwds();
   noteItemsEl.querySelectorAll(':scope > .block .cwd-label').forEach((el, i) => {
-    setPathText(el, cwds[i] || '');
+    el.dataset.path = cwds[i] || '';
     el.title = `Runs in: ${cwds[i]}`;
+    fitPathLabel(el);
   });
 }
 
@@ -947,6 +985,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 function renderNoteItems() {
+  // Every block is rebuilt below, so drop the observers on the outgoing labels
+  // rather than accumulating them on detached elements.
+  pathLabelObserver.disconnect();
   noteItemsEl.innerHTML = '';
   if (!currentItems.length) {
     noteItemsEl.innerHTML = '<p class="empty">Empty note — add text or a code block.</p>';
@@ -1111,6 +1152,7 @@ function renderBlock(block) {
 
   const cwdLabel = document.createElement('span');
   cwdLabel.className = 'cwd-label';
+  pathLabelObserver.observe(cwdLabel);
 
   const removeBtn = document.createElement('button');
   removeBtn.className = 'remove-btn push-right';
@@ -1293,6 +1335,7 @@ function renderBlock(block) {
       header.insertBefore(clearBtn, removeBtn);
     }
     killBtn.classList.remove('hidden');
+    fitPathLabel(cwdLabel); // these buttons just took space from the label
   }
 
   function attachToExecution(execId) {
