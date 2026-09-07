@@ -72,7 +72,7 @@ shellnote/
 - **Editing directly in the browser**: every block of text or code is an editable textarea.
   - **+ Text** adds a new prose block; **+ Code Block** adds a new runnable block (pick its shell from the dropdown).
   - **Remove** on any block deletes it from the note.
-  - **Save** writes your current edits back to the note's `.md` file.
+  - **Save** writes your current edits back to the note's `.md` file. The **Autosave** toggle beside it (remembered across launches) writes the note automatically a few seconds after you stop typing, when you switch notes, and when the tab is hidden — the idle delay is set in **Settings → General**. With Autosave off, leaving the page with unsaved edits asks first.
   - **Save As** writes the current content to a new file (prompts for a filename) and switches to it.
   - **Delete** removes the note file entirely (asks for confirmation).
 - **Run** executes a block as its own process (no shared working directory or variables between blocks in this version). Output streams live; after it finishes, only the last ~10 lines show by default — click **Show more** / **Show less** to expand or collapse.
@@ -92,7 +92,9 @@ Reload the note in the browser to pick up external edits.
 
 ### Organising the sidebar
 
-Drag notes to arrange them; the sort button restores A–Z (greyed out when the list already is). Hover a note and click its star to add it to **Quick access**, a collapsible section above the list that stays hidden until something is starred. Both the arrangement and the Quick access set are remembered per notes folder.
+Notes in subfolders of the notes folder show as a **tree** — click a folder row to fold or unfold it, and hover a folder for a **+** that creates a new note directly inside it. Drag notes to arrange them within their folder; the sort button restores A–Z (greyed out when the list already is).
+
+Both **Quick access** and **All notes** are collapsible — click either heading to fold it away. Hover a note and click its star to add it to Quick access, pinned above the list. The arrangement, the folded folders, and the Quick access set are all remembered per notes folder.
 
 ### Reading a log (pop-out)
 

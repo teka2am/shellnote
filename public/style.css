@@ -563,7 +563,7 @@ body {
 .note-star:hover { transform: none; filter: none; } /* the row is the hover target, not the star */
 
 #starred-section.hidden { display: none; }
-#starred-header {
+.section-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -580,12 +580,55 @@ body {
   cursor: pointer;
   border-radius: 6px;
 }
-#starred-header:hover { background: var(--panel); color: var(--text); transform: none; filter: none; }
-.starred-caret { flex: none; transform: rotate(90deg); transition: transform 0.15s ease; }
-#starred-section.collapsed .starred-caret { transform: rotate(0deg); }
+.section-header:hover { background: var(--panel); color: var(--text); transform: none; filter: none; }
+.section-caret { flex: none; transform: rotate(90deg); transition: transform 0.15s ease; }
+.collapsed > .section-header .section-caret { transform: rotate(0deg); }
 #starred-section.collapsed #starred-items { display: none; }
-#starred-count { margin-left: auto; opacity: 0.7; }
+#all-notes-section.collapsed #note-list-items { display: none; }
+.section-count { margin-left: auto; opacity: 0.7; }
 #starred-items { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+#all-notes-section { margin-top: 2px; }
+
+/* Folder tree. Each row (folder or note) is indented by its depth via the
+   --depth custom property set in JS; folders fold on click. */
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  padding-left: calc(8px + var(--depth, 0) * 14px);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.folder-row:hover { background: var(--panel); color: var(--text); }
+.folder-caret {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+}
+.folder-row.collapsed .folder-caret { transform: rotate(0deg); }
+.folder-icon { flex: none; display: flex; opacity: 0.7; }
+.folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-add-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.folder-row:hover .folder-add-btn { opacity: 0.6; }
+.folder-add-btn:hover { opacity: 1; transform: none; filter: none; }
+
+#note-list .note-item { padding-left: calc(8px + var(--depth, 0) * 14px); }
 
 /* Sidebar reordering: the row lands on the edge the bar is drawn on. Drawn as
    a pseudo-element rather than a box-shadow so the bar stays straight — a
@@ -1041,6 +1084,36 @@ pre.output {
   cursor: pointer;
 }
 #note-toolbar button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* Autosave toggle — sits just before Save, the way notemd places it. Reads as
+   a control, not a button: a checkbox with a label. */
+#autosave-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+#autosave-toggle:hover { color: var(--text); }
+#autosave-toggle.active { color: var(--text); border-color: var(--accent); background: var(--panel); }
+#autosave-toggle input { margin: 0; cursor: pointer; accent-color: var(--accent); }
+
+.settings-unit { font-size: 12px; color: var(--muted); margin-left: 6px; }
+#autosave-delay-input {
+  width: 60px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
 
 #note-toolbar button.danger { background: transparent; color: var(--fail); border-color: var(--fail); margin-left: 12px; }
 
