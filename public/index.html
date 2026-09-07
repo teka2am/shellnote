@@ -129,6 +129,16 @@
             </button>
           </div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-header">
+            <span class="settings-label">Autosave idle delay</span>
+          </div>
+          <div class="settings-value">
+            <input type="number" id="autosave-delay-input" min="1" max="120" step="1" />
+            <span class="settings-unit">seconds</span>
+          </div>
+          <div class="settings-hint">With Autosave on (toggle in the note toolbar), a note is saved this long after you stop typing — and also when you switch notes or hide the tab. With it off, nothing is written until you press Save.</div>
+        </div>
         <div class="settings-footer">
           <button id="clear-app-data-btn" class="danger">Clear all app data</button>
         </div>
@@ -194,7 +204,9 @@
         <p>Supported: headings, <b>bold</b>/<i>italic</i>/strikethrough (<code>**</code> or <code>__</code>), inline code, links and images, bullet and numbered lists including nested ones, task lists (<code>- [ ]</code>, shown as read-only checkboxes — tick them by editing the text), blockquotes, horizontal rules, tables with alignment, and code fences (shell tags become runnable blocks, others display as code). Not supported: footnotes, reference links, bare-URL autolinking, and raw HTML, which is escaped rather than rendered.</p>
 
         <h3>Organising the sidebar</h3>
-        <p>Drag notes to arrange them, or use the sort button to restore A–Z (it's greyed out when the list already is). Hover a note and click its star to add it to <b>Quick access</b>, a collapsible section pinned above the list. Both the arrangement and the Quick access set are remembered per notes folder.</p>
+        <p>Notes in subfolders of the notes folder show as a <b>tree</b> — click a folder row to fold or unfold it (the open/closed state is remembered per notes folder), and hover a folder for a <b>+</b> that creates a new note straight into it. Drag notes to arrange them within their folder, or use the sort button to restore A–Z (it's greyed out when the list already is).</p>
+        <p>Both <b>Quick access</b> and <b>All notes</b> are collapsible sections — click either heading to fold it away. Hover a note and click its star to add it to Quick access, pinned above the list. The arrangement, the folded folders, and the Quick access set are all remembered per notes folder.</p>
+        <p><b>Autosave</b> (toggle in the note toolbar, remembered across launches) writes the open note a few seconds after you stop typing, when you switch to another note, and when the tab is hidden — never on every keystroke. The idle delay is set in <b>Settings → General</b>. With it off, the <b>Save</b> button is the only thing that writes, and leaving the page with unsaved changes asks first.</p>
 
         <h3>Where blocks run</h3>
         <p>Each block's header shows the folder it will run in. The starting folder is the <b>Run folder</b> (Settings), defaulting to where the server was started. A <code>cd</code> inside a block shifts the folder of same-shell blocks below it — each shell keeps its own folder lineage, and only forms that shell understands are recognized (<code>cd /d</code>, bare <code>D:</code> for cmd; <code>Set-Location</code> for powershell; case-sensitive <code>cd</code> and <code>~</code> for bash). Targets built from environment variables can't be predicted and are ignored.</p>
@@ -274,22 +286,35 @@
         <span id="notes-folder-label"></span>
       </div>
       <div id="starred-section" class="hidden">
-        <button id="starred-header" title="Show or hide quick access notes">
-          <svg class="starred-caret" viewBox="0 0 16 16" width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+        <button id="starred-header" class="section-header" title="Show or hide quick access notes">
+          <svg class="section-caret" viewBox="0 0 16 16" width="10" height="10" xmlns="http://www.w3.org/2000/svg">
             <path fill="currentColor" d="M5 3.5 10.5 8 5 12.5z"/>
           </svg>
           <span>Quick access</span>
-          <span id="starred-count"></span>
+          <span id="starred-count" class="section-count"></span>
         </button>
         <div id="starred-items"></div>
       </div>
-      <div id="note-list-items"></div>
+      <div id="all-notes-section">
+        <button id="all-notes-header" class="section-header" title="Show or hide all notes">
+          <svg class="section-caret" viewBox="0 0 16 16" width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+            <path fill="currentColor" d="M5 3.5 10.5 8 5 12.5z"/>
+          </svg>
+          <span>All notes</span>
+          <span id="all-notes-count" class="section-count"></span>
+        </button>
+        <div id="note-list-items"></div>
+      </div>
     </aside>
     <main id="note-content">
       <div id="note-toolbar" class="hidden">
         <span id="current-filename" title="Click to rename"></span>
         <button id="add-text-btn">+ Text</button>
         <button id="add-block-btn">+ Code Block</button>
+        <label id="autosave-toggle" title="Autosave: save automatically a few seconds after you stop typing, when you leave the note, and when the tab is hidden.">
+          <input type="checkbox" id="autosave-checkbox" />
+          <span>Autosave</span>
+        </label>
         <button id="save-btn">Save</button>
         <button id="save-as-btn">Save As</button>
         <button id="delete-note-btn" class="danger">Delete</button>

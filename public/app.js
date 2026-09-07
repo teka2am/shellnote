@@ -335,12 +335,14 @@ let originalContent = '';
 function markDirty() {
   isDirty = currentContent() !== originalContent;
   saveBtn.classList.toggle('primary', isDirty);
+  scheduleAutosave(); // restarts the idle timer, or clears it once clean again
 }
 
 function markClean() {
   originalContent = currentContent();
   isDirty = false;
   saveBtn.classList.remove('primary');
+  clearTimeout(autosaveTimer);
 }
 
 // ---- drag & drop reordering ----
@@ -745,11 +747,15 @@ async function toggleStar(file, starred) {
 
 // One builder for both lists, so a starred note behaves identically whether
 // it's clicked in the starred section or in the full list below it.
-function createNoteItem({ file, path, starred }, { list }) {
+function createNoteItem({ file, path, starred }, { list, depth = 0, label }) {
   const item = document.createElement('div');
   item.className = 'note-item';
   item.dataset.file = file;
-  item.title = path;
+  item.title = path || file;
+  // In the tree the row is already nested under its folder, so it only needs
+  // its own filename; Quick access is flat, so it keeps the full path to tell
+  // same-named notes in different folders apart.
+  if (depth) item.style.setProperty('--depth', depth);
   item.addEventListener('click', () => selectNote(file));
 
   item.draggable = true;
@@ -773,7 +779,7 @@ function createNoteItem({ file, path, starred }, { list }) {
 
   const nameSpan = document.createElement('span');
   nameSpan.className = 'note-name';
-  nameSpan.textContent = file;
+  nameSpan.textContent = label || file;
   item.appendChild(nameSpan);
 
   // The star is the gesture; the section it feeds is labelled "Quick access"
@@ -791,12 +797,121 @@ function createNoteItem({ file, path, starred }, { list }) {
   return item;
 }
 
+// ---- folder tree ----
+// Notes come back as slash-joined paths relative to the notes folder
+// ("sub/dir/note.md"). Group them into a tree by their leading segments so the
+// sidebar can show real folders; the notes inside each folder keep whatever
+// order noteList is in (A–Z or hand-arranged).
+function buildNoteTree(notes) {
+  const root = { name: '', path: '', folders: new Map(), notes: [] };
+  for (const note of notes) {
+    const parts = note.file.split('/');
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i];
+      if (!node.folders.has(seg)) {
+        node.folders.set(seg, { name: seg, path: parts.slice(0, i + 1).join('/'), folders: new Map(), notes: [] });
+      }
+      node = node.folders.get(seg);
+    }
+    node.notes.push(note);
+  }
+  return root;
+}
+
+// Which folders are folded, remembered per notes folder like the note order.
+let collapsedFolders = new Set();
+
+function folderStorageKey() {
+  return `folderCollapsed:${currentNotesFolder || ''}`;
+}
+
+function loadCollapsedFolders() {
+  try {
+    collapsedFolders = new Set(JSON.parse(localStorage.getItem(folderStorageKey()) || '[]'));
+  } catch {
+    collapsedFolders = new Set();
+  }
+}
+
+function saveCollapsedFolders() {
+  localStorage.setItem(folderStorageKey(), JSON.stringify([...collapsedFolders]));
+}
+
+const ICON_FOLDER = '<svg viewBox="0 0 16 16" width="13" height="13" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M1.5 4c0-.55.45-1 1-1h3.2l1.1 1.3h6.7c.55 0 1 .45 1 1v6.2c0 .55-.45 1-1 1h-11c-.55 0-1-.45-1-1V4Z"/></svg>';
+const ICON_PLUS_SMALL = '<svg viewBox="0 0 16 16" width="12" height="12" xmlns="http://www.w3.org/2000/svg"><rect fill="currentColor" x="7" y="3" width="2" height="10" rx="1"/><rect fill="currentColor" x="3" y="7" width="10" height="2" rx="1"/></svg>';
+
+function createFolderRow(folder, depth) {
+  const collapsed = collapsedFolders.has(folder.path);
+  const row = document.createElement('div');
+  row.className = `folder-row${collapsed ? ' collapsed' : ''}`;
+  row.style.setProperty('--depth', depth);
+  row.title = folder.path;
+
+  const caret = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  caret.setAttribute('viewBox', '0 0 16 16');
+  caret.setAttribute('class', 'section-caret folder-caret');
+  caret.innerHTML = '<path fill="currentColor" d="M5 3.5 10.5 8 5 12.5z"/>';
+
+  const icon = document.createElement('span');
+  icon.className = 'folder-icon';
+  icon.innerHTML = ICON_FOLDER;
+
+  const name = document.createElement('span');
+  name.className = 'folder-name';
+  name.textContent = folder.name;
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'folder-add-btn';
+  addBtn.innerHTML = ICON_PLUS_SMALL;
+  addBtn.title = `New note in "${folder.path}"`;
+  addBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    createNoteInFolder(folder.path);
+  });
+
+  row.append(caret, icon, name, addBtn);
+  row.addEventListener('click', () => {
+    if (collapsedFolders.has(folder.path)) collapsedFolders.delete(folder.path);
+    else collapsedFolders.add(folder.path);
+    saveCollapsedFolders();
+    renderNoteList();
+    markActiveInList(currentFile);
+  });
+  return row;
+}
+
+// Renders one tree node's folders (sorted) then its notes (noteList order),
+// each note carrying the sibling list it belongs to so a drag reorders only
+// within that folder.
+function renderTreeNode(node, container, depth) {
+  [...node.folders.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((folder) => {
+      container.appendChild(createFolderRow(folder, depth));
+      if (collapsedFolders.has(folder.path)) return;
+      renderTreeNode(folder, container, depth + 1);
+    });
+
+  const siblingFiles = node.notes.map((n) => n.file);
+  node.notes.forEach((note) => {
+    const el = createNoteItem(note, {
+      list: noteListItemsEl,
+      depth,
+      label: note.file.split('/').pop(),
+    });
+    el.dataset.siblings = siblingFiles.join('\n');
+    container.appendChild(el);
+  });
+}
+
 // The starred section ("Quick access" in the UI) is a filtered view of the same
 // list, so whatever order the notes are in — A–Z or hand-arranged — both
 // sections follow it.
 function renderNoteList() {
   noteListItemsEl.innerHTML = '';
-  noteList.forEach((note) => noteListItemsEl.appendChild(createNoteItem(note, { list: noteListItemsEl })));
+  renderTreeNode(buildNoteTree(noteList), noteListItemsEl, 0);
+  document.getElementById('all-notes-count').textContent = noteList.length || '';
 
   const starred = starredNotes();
   const section = document.getElementById('starred-section');
@@ -810,19 +925,26 @@ function renderNoteList() {
   updateStatusIndicators();
 }
 
-// ---- starred section collapse (persisted, like the sidebar and theme) ----
-const starredSectionEl = document.getElementById('starred-section');
-
-function setStarredCollapsed(collapsed) {
-  starredSectionEl.classList.toggle('collapsed', collapsed);
-  localStorage.setItem('starredCollapsed', collapsed ? '1' : '0');
+// ---- collapsible sidebar sections (persisted, like the sidebar and theme) ----
+function wireSectionCollapse(sectionEl, headerEl, storageKey) {
+  const apply = (collapsed) => {
+    sectionEl.classList.toggle('collapsed', collapsed);
+    localStorage.setItem(storageKey, collapsed ? '1' : '0');
+  };
+  headerEl.addEventListener('click', () => apply(!sectionEl.classList.contains('collapsed')));
+  apply(localStorage.getItem(storageKey) === '1');
 }
 
-document.getElementById('starred-header').addEventListener('click', () => {
-  setStarredCollapsed(!starredSectionEl.classList.contains('collapsed'));
-});
-
-setStarredCollapsed(localStorage.getItem('starredCollapsed') === '1');
+wireSectionCollapse(
+  document.getElementById('starred-section'),
+  document.getElementById('starred-header'),
+  'starredCollapsed',
+);
+wireSectionCollapse(
+  document.getElementById('all-notes-section'),
+  document.getElementById('all-notes-header'),
+  'allNotesCollapsed',
+);
 
 // ---- sidebar drag & drop ----
 let dragSourceNote = null;
@@ -892,10 +1014,79 @@ function moveWithin(list, file, boundary) {
   return true;
 }
 
-wireListReordering(noteListItemsEl, {
-  reorder: (file, boundary) => moveWithin(noteList, file, boundary),
-  save: saveNoteOrder,
-  label: 'note order',
+// The main list is a tree, so its container holds folder rows between the note
+// rows and a single flat boundary calc no longer works. A note only reorders
+// among its own folder's siblings (moving it to another folder would mean moving
+// the file, which rename does) — the row carries that sibling list on a data
+// attribute, set when the tree is rendered.
+function siblingRowsFor(srcEl) {
+  const sig = srcEl.dataset.siblings || '';
+  return [...noteListItemsEl.querySelectorAll('.note-item')].filter((el) => (el.dataset.siblings || '') === sig);
+}
+
+function boundaryAmong(rows, clientY) {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i].getBoundingClientRect();
+    if (clientY < r.top + r.height / 2) return i;
+  }
+  return rows.length;
+}
+
+// Reorders `file` within its sibling set, then splices those siblings back into
+// noteList at the slots they already hold so every other note stays put.
+function reorderSiblings(siblingFiles, file, boundary) {
+  const order = [...siblingFiles];
+  const from = order.indexOf(file);
+  if (from === -1 || boundary === from || boundary === from + 1) return false;
+  const [moved] = order.splice(from, 1);
+  order.splice(boundary > from ? boundary - 1 : boundary, 0, moved);
+  const noteByFile = new Map(noteList.map((n) => [n.file, n]));
+  const sibSet = new Set(siblingFiles);
+  let k = 0;
+  noteList = noteList.map((n) => (sibSet.has(n.file) ? noteByFile.get(order[k++]) : n));
+  return true;
+}
+
+function draggedNoteRow() {
+  return dragSourceNote && noteListItemsEl.querySelector(`.note-item[data-file="${CSS.escape(dragSourceNote)}"]`);
+}
+
+noteListItemsEl.addEventListener('dragover', (e) => {
+  if (!dragSourceNote || dragSourceList !== noteListItemsEl) return;
+  const src = draggedNoteRow();
+  if (!src) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  clearNoteDropMarkers();
+  const rows = siblingRowsFor(src);
+  const boundary = boundaryAmong(rows, e.clientY);
+  if (boundary < rows.length) rows[boundary].classList.add('drop-before');
+  else if (rows.length) rows[rows.length - 1].classList.add('drop-after');
+});
+
+noteListItemsEl.addEventListener('dragleave', (e) => {
+  if (!noteListItemsEl.contains(e.relatedTarget)) clearNoteDropMarkers();
+});
+
+noteListItemsEl.addEventListener('drop', async (e) => {
+  if (!dragSourceNote || dragSourceList !== noteListItemsEl) return;
+  const src = draggedNoteRow();
+  if (!src) return;
+  e.preventDefault();
+  clearNoteDropMarkers();
+  const file = dragSourceNote;
+  const siblings = src.dataset.siblings ? src.dataset.siblings.split('\n') : [file];
+  const boundary = boundaryAmong(siblingRowsFor(src), e.clientY);
+  dragSourceNote = null;
+  dragSourceList = null;
+  if (!reorderSiblings(siblings, file, boundary)) return; // dropped back where it started
+  renderNoteList();
+  markActiveInList(currentFile);
+  try {
+    await saveNoteOrder().then(assertOk);
+  } catch (err) {
+    showToast(`Could not save note order: ${err.message}`, 'error');
+  }
 });
 
 wireListReordering(document.getElementById('starred-items'), {
@@ -923,6 +1114,7 @@ async function loadNoteList(selectFile) {
   const notes = await fetch('/api/notes').then((r) => r.json());
   const files = notes.map((n) => n.file);
   noteList = notes;
+  loadCollapsedFolders(); // folded-folder state is per notes folder
   renderNoteList();
   markActiveInList(selectFile || (files.includes(currentFile) ? currentFile : files[0]));
   if (!files.length) {
@@ -945,6 +1137,10 @@ function markActiveInList(file) {
 }
 
 async function selectNote(file) {
+  // Leaving a note is one of autosave's save points; with it off the Save
+  // button is the only writer, so switching just drops the in-memory edits
+  // the way it always has.
+  if (currentFile && currentFile !== file) await autosaveFlush();
   currentFile = file;
   markActiveInList(file);
   const [note, execs] = await Promise.all([
@@ -1650,23 +1846,31 @@ document.getElementById('reload-notes-btn').addEventListener('click', async () =
   }
 });
 
-document.getElementById('new-note-btn').addEventListener('click', async () => {
-  let name = prompt('New note filename:', 'untitled.md');
+// `folder` is '' for the notes-folder root, or a slash path ("a/b") for the
+// hover-+ on a folder row. The server's createNote makes the parent dirs.
+async function createNoteInFolder(folder) {
+  let name = prompt(folder ? `New note filename in "${folder}":` : 'New note filename:', 'untitled.md');
   if (!name) return;
+  name = name.trim().replace(/^\/+/, '');
   if (!name.toLowerCase().endsWith('.md')) name += '.md';
+  const file = folder ? `${folder}/${name}` : name;
   const title = name.replace(/\.md$/i, '');
   try {
     await fetch('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file: name, content: `# ${title}\n` }),
+      body: JSON.stringify({ file, content: `# ${title}\n` }),
     }).then(assertOk);
-    await loadNoteList(name);
-    showToast(`Created "${name}"`);
+    if (folder) collapsedFolders.delete(folder); // so the new note is visible
+    saveCollapsedFolders();
+    await loadNoteList(file);
+    showToast(`Created "${file}"`);
   } catch (err) {
     showToast(err.message, 'error');
   }
-});
+}
+
+document.getElementById('new-note-btn').addEventListener('click', () => createNoteInFolder(''));
 
 document.getElementById('add-text-btn').addEventListener('click', () => {
   currentItems.push({ type: 'prose', text: '', _justAdded: true });
@@ -1684,19 +1888,101 @@ function currentContent() {
   return rawMode ? rawEditorEl.value : serializeItems(currentItems);
 }
 
+// One writer for the open note, shared by the Save button and autosave. Returns
+// true when it actually wrote (there was something dirty and a file to write).
+async function saveCurrentNote({ silent = false } = {}) {
+  if (!currentFile || !isDirty) return false;
+  const content = currentContent();
+  await fetch(`/api/notes/${encodeURIComponent(currentFile)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  }).then(assertOk);
+  if (rawMode) currentItems = parseMarkdownToItems(content);
+  markClean();
+  if (!silent) showToast('Saved successfully');
+  return true;
+}
+
 saveBtn.addEventListener('click', async () => {
+  clearTimeout(autosaveTimer);
   try {
-    const content = currentContent();
-    await fetch(`/api/notes/${encodeURIComponent(currentFile)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    }).then(assertOk);
-    if (rawMode) currentItems = parseMarkdownToItems(content);
-    markClean();
-    showToast('Saved successfully');
+    if (!(await saveCurrentNote())) showToast('Nothing to save');
   } catch (err) {
     showToast(err.message, 'error');
+  }
+});
+
+// ---- autosave (opt-in, remembered across launches — see notemd DECISIONS §2) ----
+// When on, the note is written a few seconds after the last edit, when another
+// note is opened (selectNote), and when the tab is hidden. Never on every
+// keystroke. When off, the Save button is the only writer and leaving the page
+// with unsaved edits asks first.
+const autosaveCheckbox = document.getElementById('autosave-checkbox');
+const autosaveToggle = document.getElementById('autosave-toggle');
+const autosaveDelayInput = document.getElementById('autosave-delay-input');
+const DEFAULT_AUTOSAVE_DELAY_SEC = 3;
+let autosaveOn = localStorage.getItem('autosave') === '1';
+let autosaveTimer = null;
+
+function autosaveDelayMs() {
+  const sec = Number(localStorage.getItem('autosaveDelaySec')) || DEFAULT_AUTOSAVE_DELAY_SEC;
+  return Math.min(120, Math.max(1, sec)) * 1000;
+}
+
+async function autosaveFlush() {
+  clearTimeout(autosaveTimer);
+  if (!autosaveOn || !isDirty || !currentFile) return;
+  try {
+    await saveCurrentNote({ silent: true });
+  } catch (err) {
+    showToast(`Autosave failed: ${err.message}`, 'error');
+  }
+}
+
+function scheduleAutosave() {
+  clearTimeout(autosaveTimer);
+  if (autosaveOn && isDirty) autosaveTimer = setTimeout(autosaveFlush, autosaveDelayMs());
+}
+
+function setAutosave(on) {
+  autosaveOn = on;
+  localStorage.setItem('autosave', on ? '1' : '0');
+  autosaveCheckbox.checked = on;
+  autosaveToggle.classList.toggle('active', on);
+  if (on) scheduleAutosave();
+  else clearTimeout(autosaveTimer);
+}
+
+autosaveCheckbox.addEventListener('change', () => setAutosave(autosaveCheckbox.checked));
+
+autosaveDelayInput.value = String(Number(localStorage.getItem('autosaveDelaySec')) || DEFAULT_AUTOSAVE_DELAY_SEC);
+autosaveDelayInput.addEventListener('change', () => {
+  const sec = Math.min(120, Math.max(1, Math.round(Number(autosaveDelayInput.value) || DEFAULT_AUTOSAVE_DELAY_SEC)));
+  autosaveDelayInput.value = String(sec);
+  localStorage.setItem('autosaveDelaySec', String(sec));
+});
+
+setAutosave(autosaveOn);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) autosaveFlush();
+});
+
+window.addEventListener('beforeunload', (e) => {
+  if (!isDirty || !currentFile) return;
+  if (autosaveOn) {
+    // An async fetch would be cancelled as the page tears down; a synchronous
+    // PUT is the one thing that still lands during unload.
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `/api/notes/${encodeURIComponent(currentFile)}`, false);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify({ content: currentContent() }));
+    } catch { /* best effort */ }
+  } else {
+    e.preventDefault();
+    e.returnValue = '';
   }
 });
 
@@ -2069,6 +2355,7 @@ function updateSortIndicators() {
 }
 
 setInterval(refreshProcesses, 2000);
-loadMeta();
-loadNoteList();
+// Meta first: it resolves the current notes folder, which keys the per-folder
+// folded-folder state the note list reads on render.
+loadMeta().then(() => loadNoteList());
 refreshProcesses();
